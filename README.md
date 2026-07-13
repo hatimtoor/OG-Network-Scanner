@@ -56,6 +56,24 @@ otherwise de-anonymize devices.
 
 All security features are optional and degrade gracefully when unconfigured.
 
+### Deep device inspection
+
+Beyond type/OS identification, NetScope can pull deep detail per device. Light
+enrichment runs automatically during scans; heavy probes run on demand via the
+**Deep Scan** button in a device's detail panel.
+
+- **Exact model / serial / firmware** — from UPnP/SSDP descriptions and mDNS TXT
+  records (auto, no hardware needed).
+- **Service & version fingerprint** — banner grabbing + HTTP `Server` header/title
+  + TLS certificate common name for each open port.
+- **SNMP system info** — description, name, uptime, location from printers, APs,
+  NAS and managed switches (community configurable via `NETSCOPE_SNMP_COMMUNITY`).
+- **Passive OS fingerprint** — DHCP option-55 and LLDP are broadcast, so NetScope
+  fingerprints OS and infrastructure gear from your PC with no mirror port.
+- **Vulnerability (CVE) correlation** — detected software/versions are checked
+  against the NVD database; high/critical findings raise alerts. Set
+  `NETSCOPE_NVD_API_KEY` for a higher rate limit (optional).
+
 ---
 
 ## Requirements
