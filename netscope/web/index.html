@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetScope — Network Monitor</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">🛰️</span>
+      <div>
+        <h1>NetScope</h1>
+        <span>Network Discovery &amp; Security Monitor</span>
+      </div>
+    </div>
+    <div class="status-strip" id="statusStrip"></div>
+    <button class="primary" id="scanBtn">Scan now</button>
+  </header>
+
+  <div class="disclaimer" id="disclaimer" style="display:none">
+    ⚠️ Use NetScope only on networks you own or are authorized to scan.
+    <button id="dismissDisclaimer">Got it</button>
+  </div>
+
+  <nav class="tabs">
+    <button data-view="devices" class="active">Devices</button>
+    <button data-view="topology">Topology</button>
+    <button data-view="alerts">Alerts <em id="alertCount"></em></button>
+  </nav>
+
+  <main>
+    <section class="view active" id="view-devices">
+      <div class="grid" id="deviceGrid"></div>
+      <div class="empty" id="devicesEmpty">Scanning your network… devices will appear here.</div>
+    </section>
+
+    <section class="view" id="view-topology">
+      <svg id="topology"></svg>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="view" id="view-alerts">
+      <div class="events" id="eventList"></div>
+      <div class="empty" id="alertsEmpty">No alerts yet.</div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
