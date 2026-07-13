@@ -43,8 +43,10 @@ async function refreshAll() {
 // --------------------------------------------------------------------------- //
 function renderStatus() {
   const online = devices.filter((d) => d.is_online).length;
+  const subs = status.subnets || (status.subnet ? [status.subnet] : []);
+  const subnetLabel = subs.length > 1 ? `${subs[0]} +${subs.length - 1}` : (subs[0] || "—");
   const items = [
-    ["Subnet", status.subnet || "—"],
+    [subs.length > 1 ? "Subnets" : "Subnet", subnetLabel],
     ["Gateway", status.gateway || "—"],
     ["Devices", `${online} online / ${devices.length}`],
     ["Last scan", status.scanning ? "scanning…" : fmtTime(status.last_scan)],
