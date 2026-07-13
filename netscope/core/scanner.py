@@ -6,6 +6,7 @@ from dataclasses import asdict
 
 from ..config import settings
 from . import discovery, identify, mdns, portscan
+from ..enrich import passive, upnp
 
 
 def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict]:
@@ -26,7 +27,13 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
         except Exception:
             continue
 
-    mdns_map = mdns.browse(duration=3.0)
+    # Light, broadcast-based enrichment done once per scan (no per-device storm).
+    mdns_detailed = mdns.browse_details(duration=3.0)
+    mdns_map = {ip: d.get("services", []) for ip, d in mdns_detailed.items()}
+    try:
+        upnp_map = {ip: info for ip, info in upnp.describe_all(timeout=3.0).items()}
+    except Exception:
+        upnp_map = {}
 
     def enrich(host: discovery.Host) -> dict:
         ports_result = portscan.ScanResult()
@@ -39,6 +46,20 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
         open_ports = [p.port for p in ports_result.ports]
         services = mdns_map.get(host.ip, [])
 
+        # Assemble light, already-collected enrichment (no extra probing here).
+        details: dict = {}
+        upnp_info = upnp_map.get(host.ip)
+        if upnp_info and not upnp_info.is_empty():
+            details["upnp"] = upnp_info.to_dict()
+        mdns_model = mdns_detailed.get(host.ip, {}).get("model", "")
+        if mdns_model:
+            details["mdns_model"] = mdns_model
+        passive_fp = passive.listener.get(host.mac)
+        if passive_fp:
+            details["passive"] = passive_fp
+
+        nmap_os = ports_result.os_guess or passive_fp.get("dhcp_os", "")
+
         ident = identify.identify(
             mac=host.mac,
             ip=host.ip,
@@ -47,7 +68,7 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
             open_ports=open_ports,
             ttl=host.ttl,
             mdns_services=services,
-            nmap_os=ports_result.os_guess,
+            nmap_os=nmap_os,
         )
 
         return {
@@ -62,6 +83,7 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
             "ports": [asdict(p) for p in ports_result.ports],
             "scan_method": ports_result.method,
             "mdns_services": services,
+            "details": details,
         }
 
     # Port scans are I/O-bound; run a few hosts concurrently.
