@@ -100,6 +100,11 @@ class Settings:
     suricata_eve_path: str = field(default_factory=lambda: _get("NETSCOPE_SURICATA_EVE", ""))
     zeek_log_dir: str = field(default_factory=lambda: _get("NETSCOPE_ZEEK_DIR", ""))
     yara_rules_path: str = field(default_factory=lambda: _get("NETSCOPE_YARA_RULES", ""))
+    nvd_api_key: str = field(default_factory=lambda: _get("NETSCOPE_NVD_API_KEY", ""))
+
+    # Deep enrichment
+    snmp_community: str = field(default_factory=lambda: _get("NETSCOPE_SNMP_COMMUNITY", "public"))
+    passive_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_PASSIVE", True))
 
 
 _load_dotenv()
