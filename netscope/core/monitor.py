@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 from ..config import RISKY_PORTS, settings
 from ..db import store
 from ..notify import notify
+from ..security import sensor, threatintel
 from . import scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
@@ -29,6 +30,7 @@ class Monitor:
         self.last_scan_iso: str | None = None
         self._meter = traffic.TrafficMeter()
         self.latest_traffic: dict | None = None
+        self._checked_ips: set[str] = set()
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -117,9 +119,47 @@ class Monitor:
         while self._running:
             try:
                 await self.scan_once()
+                await self._poll_security()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
+
+    async def _poll_security(self) -> None:
+        """Ingest new IDS alerts and optionally reputation-check external IPs."""
+        # 1) Suricata/Zeek IDS alerts appended since last poll.
+        try:
+            alerts = await asyncio.to_thread(sensor.poll_new_alerts)
+        except Exception:
+            alerts = []
+        for a in alerts:
+            msg = f"[{a.source}] {a.signature} ({a.src_ip} -> {a.dest_ip})"
+            store.add_event("ids_alert", msg, severity=a.severity, ip=a.src_ip)
+            if a.severity in ("warning", "critical"):
+                notify("IDS alert", a.signature or msg)
+        if alerts:
+            await self._emit({"type": "ids_alerts", "count": len(alerts)})
+
+        # 2) Optional reputation check of new external IPs this host talks to.
+        if not (settings.threat_auto_check and threatintel.available()):
+            return
+        try:
+            conns = await asyncio.to_thread(traffic.get_connections, 200)
+        except Exception:
+            return
+        externals = [
+            c.remote_ip for c in conns
+            if c.remote_ip and not traffic._is_local_net(c.remote_ip)
+            and not c.remote_ip.startswith("127.")
+        ]
+        new_ips = [ip for ip in dict.fromkeys(externals) if ip not in self._checked_ips][:5]
+        for ip in new_ips:
+            self._checked_ips.add(ip)
+            verdict = await asyncio.to_thread(threatintel.check_ip, ip)
+            if verdict.verdict in ("malicious", "suspicious"):
+                msg = f"Connection to {verdict.verdict} IP {ip} ({verdict.detail})"
+                store.add_event("threat", msg, severity="critical", ip=ip)
+                notify("Malicious connection detected", msg)
+                await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
 
     async def _traffic_loop(self) -> None:
         """Sample host throughput on a fast cadence for live charts."""
