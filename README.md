@@ -37,6 +37,25 @@ otherwise de-anonymize devices.
 - **Device history & naming** — rename devices, mark them trusted, see first/last seen.
 - **Live dashboard** — updates in real time over WebSocket.
 
+### Traffic (v2)
+
+- **Live throughput chart** — real-time upload/download of this machine.
+- **Active connections table** — every outbound connection with process name,
+  remote IP/port, and the LAN device it maps to.
+- **CSV export** — one-click export of devices and alerts.
+
+### Security (v3)
+
+- **IP reputation** — check any IP against **VirusTotal** (set `NETSCOPE_VT_API_KEY`).
+  Optionally auto-checks the external IPs your machine talks to.
+- **File scan** — SHA-256 hash + VirusTotal reputation + optional **YARA** rules
+  (`pip install yara-python`, set `NETSCOPE_YARA_RULES`).
+- **IDS sensor ingestion** — if you run **Suricata** or **Zeek** on a mirror/SPAN
+  port, point NetScope at their logs (`NETSCOPE_SURICATA_EVE`, `NETSCOPE_ZEEK_DIR`)
+  and their alerts appear in the Security tab and drive notifications.
+
+All security features are optional and degrade gracefully when unconfigured.
+
 ---
 
 ## Requirements
@@ -93,6 +112,19 @@ NETSCOPE_SMTP_PORT=587
 NETSCOPE_SMTP_USER=
 NETSCOPE_SMTP_PASS=
 NETSCOPE_SMTP_TO=
+
+# Traffic (v2)
+NETSCOPE_TRAFFIC_INTERVAL=3  # seconds between throughput samples
+
+# Security (v3) — all optional
+NETSCOPE_VT_API_KEY=         # VirusTotal API key (free tier works)
+NETSCOPE_THREAT_AUTOCHECK=false  # auto-check external IPs this host talks to
+NETSCOPE_SURICATA_EVE=       # path to Suricata eve.json
+NETSCOPE_ZEEK_DIR=           # path to Zeek log directory
+NETSCOPE_YARA_RULES=         # path to a .yar rules file (needs yara-python)
+
+# Misc
+NETSCOPE_OPEN_BROWSER=true   # set false to not auto-open the dashboard
 ```
 
 ---
