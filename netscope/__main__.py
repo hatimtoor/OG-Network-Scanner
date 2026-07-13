@@ -17,7 +17,7 @@ def main() -> None:
     print(f"  Scanning every {settings.scan_interval}s. Press Ctrl+C to stop.\n")
 
     # Open the dashboard in the default browser shortly after startup.
-    if settings.host in {"127.0.0.1", "0.0.0.0", "localhost"}:
+    if settings.open_browser and settings.host in {"127.0.0.1", "0.0.0.0", "localhost"}:
         Timer(1.5, lambda: webbrowser.open(url)).start()
 
     uvicorn.run(
