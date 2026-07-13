@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import __app_name__, __version__
 from ..config import settings
-from ..core import discovery, traffic
+from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
 from ..db import store
 from ..security import sensor, threatintel, yara_scan
@@ -68,10 +68,12 @@ app = FastAPI(title=__app_name__, version=__version__, lifespan=lifespan)
 # --------------------------------------------------------------------------- #
 @app.get("/api/status")
 async def get_status() -> dict:
+    targets = discovery.get_scan_targets()
     return {
         "app": __app_name__,
         "version": __version__,
-        "subnet": discovery.detect_subnet(),
+        "subnet": targets[0] if targets else "",
+        "subnets": targets,
         "gateway": discovery.get_gateway_ip(),
         "local_ip": discovery.get_local_ip(),
         "scanning": monitor.scanning,
@@ -175,6 +177,16 @@ async def export_events() -> Response:
     rows = store.list_events(limit=1000)
     cols = ["ts", "severity", "type", "ip", "mac", "message"]
     return _csv_response(rows, cols, "netscope-events.csv")
+
+
+@app.get("/api/report")
+async def network_report() -> Response:
+    html_doc = await asyncio.to_thread(report.build_html_report)
+    return Response(
+        content=html_doc,
+        media_type="text/html",
+        headers={"Content-Disposition": 'attachment; filename="netscope-report.html"'},
+    )
 
 
 # --------------------------------------------------------------------------- #
