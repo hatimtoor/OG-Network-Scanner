@@ -13,5 +13,8 @@ python-nmap==0.7.1     # OS/service detection when Nmap is installed (optional)
 zeroconf==0.136.2      # mDNS / Bonjour device discovery
 mac-vendor-lookup==0.1.12  # offline OUI vendor database
 
+# Traffic monitoring
+psutil==6.1.1          # host throughput + active connection sampling
+
 # Notifications
 requests==2.32.3       # webhook (Telegram/Discord) + email helpers
