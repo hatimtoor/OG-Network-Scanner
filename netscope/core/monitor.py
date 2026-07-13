@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Awaitable, Callable
 
 from ..config import RISKY_PORTS, settings
 from ..db import store
 from ..notify import notify
-from . import scanner
+from . import scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
 
@@ -22,24 +23,30 @@ class Monitor:
     def __init__(self, broadcast: BroadcastFn | None = None):
         self.broadcast = broadcast
         self._task: asyncio.Task | None = None
+        self._traffic_task: asyncio.Task | None = None
         self._running = False
         self._scanning = False
         self.last_scan_iso: str | None = None
+        self._meter = traffic.TrafficMeter()
+        self.latest_traffic: dict | None = None
 
     # ---- lifecycle ---- #
     def start(self) -> None:
+        self._running = True
         if self._task is None or self._task.done():
-            self._running = True
             self._task = asyncio.create_task(self._loop())
+        if self._traffic_task is None or self._traffic_task.done():
+            self._traffic_task = asyncio.create_task(self._traffic_loop())
 
     async def stop(self) -> None:
         self._running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._task, self._traffic_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     # ---- scanning ---- #
     async def scan_once(self) -> list[dict]:
@@ -113,6 +120,36 @@ class Monitor:
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
+
+    async def _traffic_loop(self) -> None:
+        """Sample host throughput on a fast cadence for live charts."""
+        sample_count = 0
+        while self._running:
+            try:
+                snap = await asyncio.to_thread(traffic.snapshot, self._meter, time.monotonic())
+                tp = snap.throughput
+                self.latest_traffic = {
+                    "sent_rate": tp.sent_rate,
+                    "recv_rate": tp.recv_rate,
+                    "bytes_sent": tp.bytes_sent,
+                    "bytes_recv": tp.bytes_recv,
+                    "connections": len(snap.connections),
+                    "per_device_conns": snap.per_device_conns,
+                }
+                store.add_traffic_sample(
+                    tp.sent_rate, tp.recv_rate, tp.bytes_sent, tp.bytes_recv,
+                    len(snap.connections),
+                )
+                await self._emit({"type": "traffic", "traffic": {
+                    "sent_rate": tp.sent_rate, "recv_rate": tp.recv_rate,
+                    "connections": len(snap.connections),
+                }})
+                sample_count += 1
+                if sample_count % 100 == 0:
+                    await asyncio.to_thread(store.prune_traffic)
+            except Exception:
+                pass
+            await asyncio.sleep(settings.traffic_interval)
 
     async def _emit(self, message: dict) -> None:
         if self.broadcast:
