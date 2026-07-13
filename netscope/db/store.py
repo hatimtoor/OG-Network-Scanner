@@ -17,6 +17,32 @@ _engine = create_engine(
 
 def init_db() -> None:
     SQLModel.metadata.create_all(_engine)
+    _migrate()
+
+
+def _migrate() -> None:
+    """Add columns introduced in newer versions to a pre-existing database.
+
+    create_all() creates missing tables but never alters existing ones, so an
+    older netscope.db would be missing the newer Device columns. SQLite supports
+    ADD COLUMN, which is all we need.
+    """
+    additions = {
+        "details_json": "TEXT DEFAULT '{}'",
+        "cves_json": "TEXT DEFAULT '[]'",
+        "deep_scanned_at": "DATETIME",
+    }
+    try:
+        with _engine.connect() as conn:
+            existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(device)")}
+            if not existing:
+                return
+            for name, ddl in additions.items():
+                if name not in existing:
+                    conn.exec_driver_sql(f"ALTER TABLE device ADD COLUMN {name} {ddl}")
+            conn.commit()
+    except Exception:
+        pass
 
 
 def get_session() -> Session:
@@ -50,6 +76,12 @@ def upsert_device(data: dict) -> tuple[Device, bool]:
             device.ports_json = json.dumps(data["ports"])
         if "reasons" in data:
             device.reasons_json = json.dumps(data["reasons"])
+
+        # Light auto-enrichment merged from the scan (UPnP/mDNS/passive).
+        if data.get("details"):
+            merged = json.loads(device.details_json or "{}")
+            merged.update(data["details"])
+            device.details_json = json.dumps(merged)
 
         device.is_online = True
         device.last_seen = utcnow()
@@ -119,8 +151,28 @@ def _device_to_dict(d: Device) -> dict:
         "last_seen": d.last_seen.isoformat() if d.last_seen else None,
         "ports": json.loads(d.ports_json or "[]"),
         "reasons": json.loads(d.reasons_json or "[]"),
+        "details": json.loads(d.details_json or "{}"),
+        "cves": json.loads(d.cves_json or "[]"),
+        "deep_scanned_at": d.deep_scanned_at.isoformat() if d.deep_scanned_at else None,
         "display_name": d.label or d.hostname or d.vendor or d.ip,
     }
+
+
+def save_device_details(key: str, details: dict, cves: list) -> dict | None:
+    """Persist on-demand deep-scan results for a device."""
+    with get_session() as session:
+        device = session.exec(select(Device).where(Device.key == key)).first()
+        if device is None:
+            return None
+        merged = json.loads(device.details_json or "{}")
+        merged.update(details or {})
+        device.details_json = json.dumps(merged)
+        device.cves_json = json.dumps(cves or [])
+        device.deep_scanned_at = utcnow()
+        session.add(device)
+        session.commit()
+        session.refresh(device)
+        return _device_to_dict(device)
 
 
 # --------------------------------------------------------------------------- #
