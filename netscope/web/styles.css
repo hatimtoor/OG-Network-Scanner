@@ -159,6 +159,21 @@ main { padding: 20px 28px 60px; }
 .sec-result .kv2 { margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.7; word-break: break-all; }
 .event.ids_alert, .event.threat { border-left-color: var(--crit); }
 
+/* Deep scan section */
+.deep-wrap { margin: 14px 0; padding: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; }
+.deep-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.deep-kv { display: grid; grid-template-columns: 90px 1fr; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
+.deep-kv .dk { color: var(--muted); }
+.deep-kv .dv { word-break: break-word; }
+.cve-block { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.cve { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--panel); border-left: 3px solid var(--muted); }
+.cve.critical { border-left-color: var(--crit); }
+.cve.high { border-left-color: #ff7a45; }
+.cve.medium { border-left-color: var(--warn); }
+.cve.low { border-left-color: var(--accent); }
+.cve-sev { font-size: 10.5px; color: var(--muted); margin-left: 6px; }
+.cve-sum { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
 /* Detail modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 50; }
 .modal-backdrop.open { display: flex; }
