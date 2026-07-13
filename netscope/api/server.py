@@ -17,6 +17,7 @@ from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
 from ..db import store
+from ..enrich import deepscan
 from ..security import sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -104,6 +105,30 @@ async def patch_device(key: str, body: dict):
         return JSONResponse({"error": "not found"}, status_code=404)
     await hub.broadcast({"type": "devices_updated"})
     return device
+
+
+@app.post("/api/devices/{key}/deepscan")
+async def deep_scan_device(key: str):
+    device = store.get_device(key)
+    if device is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    open_ports = [p.get("port") for p in device.get("ports", []) if p.get("port")]
+    result = await asyncio.to_thread(
+        deepscan.deep_scan, device["ip"], device.get("mac", ""), open_ports
+    )
+    updated = store.save_device_details(key, result["details"], result["cves"])
+
+    # Raise alerts for any high-severity CVEs found.
+    for c in result["cves"]:
+        if c.get("severity") in ("CRITICAL", "HIGH"):
+            store.add_event(
+                "vulnerability",
+                f"{device['display_name']} ({device['ip']}): {c['id']} "
+                f"{c['severity']} - {c.get('source_hint', '')}",
+                severity="critical", ip=device["ip"], mac=device.get("mac", ""),
+            )
+    await hub.broadcast({"type": "devices_updated"})
+    return updated or {"error": "save failed"}
 
 
 @app.get("/api/events")
