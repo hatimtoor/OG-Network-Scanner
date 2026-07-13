@@ -40,6 +40,11 @@ class Device(SQLModel, table=True):
     ports_json: str = Field(default="[]")
     reasons_json: str = Field(default="[]")
 
+    # Deep enrichment (UPnP/SNMP/banners/passive) + vulnerability findings
+    details_json: str = Field(default="{}")
+    cves_json: str = Field(default="[]")
+    deep_scanned_at: datetime | None = Field(default=None)
+
 
 class TrafficSample(SQLModel, table=True):
     """A point-in-time throughput sample for the host, used for trend charts."""
