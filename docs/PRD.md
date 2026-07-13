@@ -1,6 +1,6 @@
 # NetScope — Product Requirements Document (PRD)
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 2026-07-14
 **Owner:** hatimtoor
 **Status:** Draft for build planning
@@ -229,10 +229,24 @@ opt-in for depth.
 
 ---
 
-## 9. Open questions
+## 9. Decisions (resolved)
 
-1. Event store: embedded (DuckDB) for easy single-binary vs OpenSearch for scale?
-2. Host agent: build minimal ourselves vs bundle osquery/Elastic Agent?
-3. ML: ship heuristics first (explainable) and add ML scoring later — agreed?
-4. Which router integrations to support first for active response (OpenWrt vs UniFi vs pfSense)?
-5. Target install footprint for the "appliance" (Pi 4/5? mini-PC minimum specs)?
+1. **Event store — tiered.** Keep **SQLite** for transactional state (devices, cases,
+   config). Add **DuckDB** (embedded, columnar) for high-volume analytics (flows, DNS,
+   connections, events) that hunting/aggregation run over. Store interface is
+   pluggable; **OpenSearch** is an optional backend for large sensor deployments only
+   (its JVM/RAM cost breaks the "runs on a Pi / your PC" default).
+2. **Host agent — build minimal ourselves.** Small cross-platform agent: software/patch
+   inventory, listening ports, logged-in users, FIM on watched paths, hardening checks.
+   Full **osquery** is an opt-in "advanced" mode, not the default (weight + management
+   burden fights our simplicity).
+3. **ML — heuristics first, ML later.** Ship explainable heuristic detections in
+   Phase A (each with a "why"); add unsupervised anomaly **scoring on top** of baselines
+   in Phase C. ML augments, never replaces, the explainable layer.
+4. **Active-response router order — OpenWrt → UniFi → pfSense**, plus a router-agnostic
+   **ARP-isolation fallback** (layer-2 cutoff from a sensor) for locked routers, shipped
+   with explicit warnings + full audit.
+5. **Appliance footprint.** Manager-only runs on anything (incl. the user's Windows PC).
+   Home sensor: **Raspberry Pi 4/5, 4GB+ RAM, SSD** (good to a few hundred Mbps + modest
+   PCAP). Heavy/gigabit + PCAP + ML: **x86 mini-PC, 4 cores / 8-16GB / SSD**. Honest cap:
+   Suricata on a Pi tops out at a few hundred Mbps; line-rate gigabit needs x86.
