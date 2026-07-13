@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 from ..config import RISKY_PORTS, settings
 from ..db import store
 from ..notify import notify
+from ..enrich import passive
 from ..security import sensor, threatintel
 from . import scanner, traffic
 
@@ -39,9 +40,18 @@ class Monitor:
             self._task = asyncio.create_task(self._loop())
         if self._traffic_task is None or self._traffic_task.done():
             self._traffic_task = asyncio.create_task(self._traffic_loop())
+        if settings.passive_enabled:
+            try:
+                passive.listener.start()  # read-only broadcast sniffing
+            except Exception:
+                pass
 
     async def stop(self) -> None:
         self._running = False
+        try:
+            passive.listener.stop()
+        except Exception:
+            pass
         for task in (self._task, self._traffic_task):
             if task:
                 task.cancel()
