@@ -136,6 +136,7 @@ function openDetail(key) {
       <div class="k">Open ports</div><div class="ports-list">${ports}</div>
     </div>
     ${reasons ? `<div class="reasons"><b>Why identified this way:</b><br>${reasons}</div>` : ""}
+    <div id="deepSection">${renderDeep(d)}</div>
     <div class="row">
       <input type="text" id="labelInput" placeholder="Custom name (e.g. Living Room TV)" value="${enc(d.label || "")}" />
     </div>
@@ -143,12 +144,14 @@ function openDetail(key) {
       <label class="toggle"><input type="checkbox" id="trustedInput" ${d.trusted ? "checked" : ""}/> Mark as trusted device</label>
     </div>
     <div class="actions">
+      <button class="ghost" id="deepBtn" data-key="${enc(d.key)}">🔬 Deep Scan</button>
       <button class="ghost" id="closeModal">Close</button>
       <button class="primary" id="saveModal" data-key="${enc(d.key)}">Save</button>
     </div>`;
 
   document.getElementById("modalBackdrop").classList.add("open");
   document.getElementById("closeModal").onclick = closeModal;
+  document.getElementById("deepBtn").onclick = (e) => doDeepScan(e.target.dataset.key);
   document.getElementById("saveModal").onclick = async (e) => {
     const label = document.getElementById("labelInput").value.trim();
     const trusted = document.getElementById("trustedInput").checked;
@@ -159,6 +162,64 @@ function openDetail(key) {
 }
 function closeModal() {
   document.getElementById("modalBackdrop").classList.remove("open");
+}
+
+function renderDeep(d) {
+  const det = d.details || {};
+  const cves = d.cves || [];
+  let html = "";
+
+  if (det.upnp) {
+    const u = det.upnp;
+    const parts = [u.manufacturer, u.model_name, u.model_number].filter(Boolean).join(" ");
+    html += kvline("UPnP", `${enc(u.friendly_name || parts)}${u.serial_number ? " · SN " + enc(u.serial_number) : ""}`);
+  }
+  if (det.mdns_model) html += kvline("mDNS model", enc(det.mdns_model));
+  if (det.snmp && (det.snmp.descr || det.snmp.name)) {
+    html += kvline("SNMP", enc(det.snmp.name || "") + (det.snmp.descr ? " · " + enc(det.snmp.descr) : ""));
+  }
+  if (det.passive && (det.passive.dhcp_os || det.passive.lldp_name)) {
+    html += kvline("Passive", enc([det.passive.dhcp_os, det.passive.lldp_name].filter(Boolean).join(" · ")));
+  }
+  if (det.ports && det.ports.length) {
+    const svc = det.ports.map((p) => {
+      const bits = [p.http_server, p.banner, p.http_title, p.tls_cn].filter(Boolean).join(" ");
+      return `${p.port}: ${enc(bits.slice(0, 60))}`;
+    }).join("<br>");
+    html += kvline("Services", svc);
+  }
+
+  if (cves.length) {
+    const items = cves.slice(0, 12).map((c) =>
+      `<div class="cve ${(c.severity || "").toLowerCase()}"><b>${enc(c.id)}</b>
+       <span class="cve-sev">${enc(c.severity)} ${c.score || ""}</span>
+       <div class="cve-sum">${enc((c.summary || "").slice(0, 140))}</div></div>`
+    ).join("");
+    html += `<div class="cve-block"><b>⚠ Known vulnerabilities (${cves.length})</b>${items}</div>`;
+  }
+
+  const when = d.deep_scanned_at ? `Last deep scan: ${fmtTime(d.deep_scanned_at)}` : "Not deep-scanned yet.";
+  return `<div class="deep-wrap"><div class="deep-meta">${when}</div>${html || '<div class="sub">Run a deep scan to pull model, services, and known vulnerabilities.</div>'}</div>`;
+}
+
+function kvline(k, v) {
+  return `<div class="deep-kv"><span class="dk">${enc(k)}</span><span class="dv">${v}</span></div>`;
+}
+
+async function doDeepScan(key) {
+  const section = document.getElementById("deepSection");
+  const btn = document.getElementById("deepBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Scanning…"; }
+  if (section) section.innerHTML = '<div class="sub">Running deep scan (UPnP, banners, SNMP, CVE lookup)… this can take ~30s.</div>';
+  try {
+    const updated = await api(`/api/devices/${encodeURIComponent(key)}/deepscan`, { method: "POST" });
+    const idx = devices.findIndex((x) => x.key === key);
+    if (idx >= 0) devices[idx] = updated;
+    if (section) section.innerHTML = renderDeep(updated);
+  } catch (e) {
+    if (section) section.innerHTML = '<div class="sub">Deep scan failed.</div>';
+  }
+  if (btn) { btn.disabled = false; btn.textContent = "🔬 Deep Scan"; }
 }
 
 // --------------------------------------------------------------------------- //
