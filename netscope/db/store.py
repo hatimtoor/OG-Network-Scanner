@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from ..config import settings
-from .models import Device, Event, utcnow
+from .models import Device, Event, TrafficSample, utcnow
 
 _engine = create_engine(
     f"sqlite:///{settings.db_path}",
@@ -164,3 +164,53 @@ def _event_to_dict(e: Event) -> dict:
         "message": e.message,
         "acknowledged": e.acknowledged,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Traffic history
+# --------------------------------------------------------------------------- #
+def add_traffic_sample(
+    sent_rate: float, recv_rate: float, bytes_sent: int, bytes_recv: int, connections: int
+) -> None:
+    with get_session() as session:
+        session.add(
+            TrafficSample(
+                sent_rate=sent_rate,
+                recv_rate=recv_rate,
+                bytes_sent=bytes_sent,
+                bytes_recv=bytes_recv,
+                connections=connections,
+            )
+        )
+        session.commit()
+
+
+def list_traffic_history(limit: int = 180) -> list[dict]:
+    """Return the most recent samples in chronological (oldest-first) order."""
+    with get_session() as session:
+        rows = session.exec(
+            select(TrafficSample).order_by(TrafficSample.ts.desc()).limit(limit)
+        ).all()
+    rows.reverse()
+    return [
+        {
+            "ts": r.ts.isoformat() if r.ts else None,
+            "sent_rate": r.sent_rate,
+            "recv_rate": r.recv_rate,
+            "connections": r.connections,
+        }
+        for r in rows
+    ]
+
+
+def prune_traffic(keep: int = 5000) -> None:
+    """Cap the traffic table so the DB doesn't grow without bound."""
+    with get_session() as session:
+        ids = session.exec(
+            select(TrafficSample.id).order_by(TrafficSample.ts.desc()).offset(keep)
+        ).all()
+        if not ids:
+            return
+        for sample in session.exec(select(TrafficSample).where(TrafficSample.id.in_(ids))).all():
+            session.delete(sample)
+        session.commit()
