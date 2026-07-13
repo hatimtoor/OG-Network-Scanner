@@ -1,0 +1,17 @@
+# NetScope — Python dependencies
+
+# Web API + server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Data models / persistence
+sqlmodel==0.0.22
+
+# Network scanning
+scapy==2.6.1            # ARP sweep (needs Npcap on Windows)
+python-nmap==0.7.1     # OS/service detection when Nmap is installed (optional)
+zeroconf==0.136.2      # mDNS / Bonjour device discovery
+mac-vendor-lookup==0.1.12  # offline OUI vendor database
+
+# Notifications
+requests==2.32.3       # webhook (Telegram/Discord) + email helpers
