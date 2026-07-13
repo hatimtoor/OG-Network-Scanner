@@ -129,6 +129,39 @@ NETSCOPE_OPEN_BROWSER=true   # set false to not auto-open the dashboard
 
 ---
 
+## Deep packet inspection setup (Suricata + Zeek)
+
+NetScope doesn't reimplement an IDS — it drives the industry-standard engines and
+shows their results. A one-command script installs and wires them up:
+
+```powershell
+# Set up BOTH engines and point NetScope at their logs
+powershell -ExecutionPolicy Bypass -File scripts\setup-ids.ps1
+
+# Just Suricata, and start live monitoring (run terminal as Administrator)
+powershell -ExecutionPolicy Bypass -File scripts\setup-ids.ps1 -Tool suricata -Start
+
+# Analyze a capture file with Zeek
+powershell -File scripts\zeek-process-pcap.ps1 -Pcap C:\captures\home.pcapng
+```
+
+What it does:
+- **Suricata** — installs it (winget `OISF.Suricata`), refreshes the Emerging
+  Threats ruleset, auto-detects your active adapter (via Npcap), writes
+  `NETSCOPE_SURICATA_EVE` into `.env`, and can start live IDS monitoring.
+- **Zeek** — has no native Windows build, so it runs via **Docker**; the script
+  pulls the `zeek/zeek` image, creates a `zeek-logs/` folder, points
+  `NETSCOPE_ZEEK_DIR` at it, and analyzes any PCAP you give it.
+
+After running it, restart `python -m netscope` and open the **Security** tab —
+IDS alerts stream in and drive notifications.
+
+> **Visibility note:** to inspect *other devices'* traffic (not just this PC's),
+> the engine must run where it can see it — on your router, on a PC attached to a
+> switch **mirror/SPAN port**, or against a PCAP captured there. On this PC alone
+> it inspects this machine's own traffic, which still catches malware your
+> computer communicates with.
+
 ## How it works
 
 ```
