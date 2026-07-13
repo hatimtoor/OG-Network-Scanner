@@ -162,6 +162,32 @@ IDS alerts stream in and drive notifications.
 > it inspects this machine's own traffic, which still catches malware your
 > computer communicates with.
 
+### Installing on an OpenWrt router (over Wi-Fi, via SSH)
+
+If your router runs **OpenWrt**, NetScope can install Suricata directly on it so
+it sees the whole network — done entirely over the network (Wi-Fi is fine):
+
+```powershell
+# Explains the effects, asks for consent, then installs over SSH
+powershell -ExecutionPolicy Bypass -File scripts\setup-router-ids.ps1 -Router 192.168.1.1
+
+powershell -File scripts\setup-router-ids.ps1 -Action status      # check it
+powershell -File scripts\setup-router-ids.ps1 -Action uninstall   # remove it cleanly
+```
+
+- **Consent first** — it prints exactly what it will do and the risks, then waits
+  for you to type `INSTALL`.
+- **Detection only** — Suricata watches and alerts; it never blocks your traffic.
+- **Flash-safe** — logs go to the router's RAM (`/tmp`), not its flash.
+- **Auto-sync** — a scheduled task pulls the router's alerts to this PC so the
+  Security tab shows them.
+- **Clean uninstall** — `-Action uninstall` stops the service, removes the
+  package, restores the original config, deletes the sync task, and clears the
+  NetScope pointer.
+
+> Only works on **OpenWrt** (not stock ISP routers). A weak router running
+> Suricata may slow your internet — watch performance and uninstall if needed.
+
 ## How it works
 
 ```
