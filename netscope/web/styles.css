@@ -55,6 +55,9 @@ button.primary {
 button.primary:hover { transform: translateY(-1px); }
 button.primary:disabled { opacity: 0.6; cursor: default; transform: none; }
 
+.report-btn { text-decoration: none; color: var(--text); border: 1px solid var(--border); background: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.report-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 .disclaimer {
   background: rgba(255, 176, 32, 0.1);
   border-bottom: 1px solid rgba(255, 176, 32, 0.3);
