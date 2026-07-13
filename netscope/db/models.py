@@ -41,6 +41,18 @@ class Device(SQLModel, table=True):
     reasons_json: str = Field(default="[]")
 
 
+class TrafficSample(SQLModel, table=True):
+    """A point-in-time throughput sample for the host, used for trend charts."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    ts: datetime = Field(default_factory=utcnow, index=True)
+    sent_rate: float = Field(default=0.0)   # bytes/sec upload
+    recv_rate: float = Field(default=0.0)   # bytes/sec download
+    bytes_sent: int = Field(default=0)      # cumulative counter
+    bytes_recv: int = Field(default=0)
+    connections: int = Field(default=0)     # active connection count
+
+
 class Event(SQLModel, table=True):
     """An alert / audit event (new device, online/offline, risky port)."""
 
