@@ -28,6 +28,7 @@
     <button data-view="devices" class="active">Devices</button>
     <button data-view="topology">Topology</button>
     <button data-view="traffic">Traffic</button>
+    <button data-view="security">Security</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
   </nav>
 
@@ -61,6 +62,34 @@
           <th>Process</th><th>Local</th><th>Remote</th><th>Port</th><th>Status</th><th>Device</th>
         </tr></thead><tbody></tbody></table>
       </div>
+    </section>
+
+    <section class="view" id="view-security">
+      <div class="sec-status" id="secStatus"></div>
+
+      <div class="sec-grid">
+        <div class="sec-panel">
+          <h3 class="section-title">IP reputation check <span class="muted">(VirusTotal)</span></h3>
+          <div class="row">
+            <input type="text" id="ipInput" placeholder="e.g. 8.8.8.8" />
+            <button class="primary" id="ipCheckBtn">Check</button>
+          </div>
+          <div id="ipResult" class="sec-result"></div>
+        </div>
+
+        <div class="sec-panel">
+          <h3 class="section-title">File scan <span class="muted">(hash + VirusTotal + YARA)</span></h3>
+          <div class="row">
+            <input type="text" id="fileInput" placeholder="C:\\path\\to\\file.exe" />
+            <button class="primary" id="fileScanBtn">Scan</button>
+          </div>
+          <div id="fileResult" class="sec-result"></div>
+        </div>
+      </div>
+
+      <h3 class="section-title">IDS alerts <span class="muted" id="idsNote">(Suricata / Zeek)</span></h3>
+      <div class="events" id="idsList"></div>
+      <div class="empty" id="idsEmpty">No IDS sensor configured. Point NetScope at a Suricata eve.json or Zeek log dir to see alerts here.</div>
     </section>
 
     <section class="view" id="view-alerts">
