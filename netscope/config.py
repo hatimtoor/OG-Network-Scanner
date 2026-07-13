@@ -68,6 +68,8 @@ class Settings:
 
     # Network / scanning
     subnet: str = field(default_factory=lambda: _get("NETSCOPE_SUBNET", ""))  # "" = auto-detect
+    subnets: str = field(default_factory=lambda: _get("NETSCOPE_SUBNETS", ""))  # comma-separated CIDRs
+    scan_all_local: bool = field(default_factory=lambda: _get_bool("NETSCOPE_SCAN_ALL_LOCAL", False))
     scan_interval: int = field(default_factory=lambda: _get_int("NETSCOPE_SCAN_INTERVAL", 120))
     traffic_interval: int = field(default_factory=lambda: _get_int("NETSCOPE_TRAFFIC_INTERVAL", 3))
     ping_timeout_ms: int = field(default_factory=lambda: _get_int("NETSCOPE_PING_TIMEOUT_MS", 600))
