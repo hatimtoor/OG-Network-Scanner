@@ -137,6 +137,25 @@ main { padding: 20px 28px 60px; }
 .conn-table tr:hover td { background: var(--panel); }
 .conn-table .proc { color: var(--accent); font-weight: 600; }
 
+/* Security */
+.sec-status { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.sec-chip { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); font-size: 12.5px; }
+.sec-chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.sec-chip .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.sec-chip .dot.off { background: #4a5568; }
+.sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 8px; }
+.sec-panel { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.sec-panel .row { display: flex; gap: 10px; margin-top: 4px; }
+.sec-panel input[type=text] { flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 11px; }
+.sec-result { margin-top: 14px; font-size: 13px; }
+.sec-result .verdict { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.verdict.clean { background: rgba(55,224,160,0.12); color: var(--ok); border: 1px solid #235c46; }
+.verdict.malicious { background: rgba(255,84,112,0.12); color: var(--crit); border: 1px solid #5a2436; }
+.verdict.suspicious { background: rgba(255,176,32,0.12); color: var(--warn); border: 1px solid #5a4620; }
+.verdict.unknown { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+.sec-result .kv2 { margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.7; word-break: break-all; }
+.event.ids_alert, .event.threat { border-left-color: var(--crit); }
+
 /* Detail modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 50; }
 .modal-backdrop.open { display: flex; }
