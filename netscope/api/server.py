@@ -17,6 +17,7 @@ from ..config import settings
 from ..core import discovery, traffic
 from ..core.monitor import Monitor
 from ..db import store
+from ..security import sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -174,6 +175,44 @@ async def export_events() -> Response:
     rows = store.list_events(limit=1000)
     cols = ["ts", "severity", "type", "ip", "mac", "message"]
     return _csv_response(rows, cols, "netscope-events.csv")
+
+
+# --------------------------------------------------------------------------- #
+# Security (v3): threat intel, IDS sensor, YARA
+# --------------------------------------------------------------------------- #
+@app.get("/api/security/status")
+async def security_status() -> dict:
+    return {
+        "virustotal": threatintel.available(),
+        "sensor_configured": sensor.configured(),
+        "suricata_path": settings.suricata_eve_path,
+        "zeek_dir": settings.zeek_log_dir,
+        "yara": yara_scan.yara_available(),
+        "auto_check": settings.threat_auto_check,
+    }
+
+
+@app.get("/api/security/ids-alerts")
+async def ids_alerts(limit: int = 200) -> list[dict]:
+    return await asyncio.to_thread(sensor.all_alerts, limit)
+
+
+@app.post("/api/security/check-ip")
+async def check_ip(body: dict):
+    ip = (body or {}).get("ip", "").strip()
+    if not ip:
+        return JSONResponse({"error": "ip required"}, status_code=400)
+    verdict = await asyncio.to_thread(threatintel.check_ip, ip)
+    return verdict.to_dict()
+
+
+@app.post("/api/security/scan-file")
+async def scan_file(body: dict):
+    path = (body or {}).get("path", "").strip()
+    if not path:
+        return JSONResponse({"error": "path required"}, status_code=400)
+    result = await asyncio.to_thread(yara_scan.scan_file, path, True)
+    return result.to_dict()
 
 
 # --------------------------------------------------------------------------- #
