@@ -64,6 +64,7 @@ RISKY_PORTS = {
 class Settings:
     host: str = field(default_factory=lambda: _get("NETSCOPE_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _get_int("NETSCOPE_PORT", 8000))
+    open_browser: bool = field(default_factory=lambda: _get_bool("NETSCOPE_OPEN_BROWSER", True))
 
     # Network / scanning
     subnet: str = field(default_factory=lambda: _get("NETSCOPE_SUBNET", ""))  # "" = auto-detect
@@ -90,6 +91,13 @@ class Settings:
     smtp_pass: str = field(default_factory=lambda: _get("NETSCOPE_SMTP_PASS", ""))
     smtp_to: str = field(default_factory=lambda: _get("NETSCOPE_SMTP_TO", ""))
     webhook_url: str = field(default_factory=lambda: _get("NETSCOPE_WEBHOOK_URL", ""))
+
+    # Security (v3) — all optional; features degrade gracefully when unset.
+    vt_api_key: str = field(default_factory=lambda: _get("NETSCOPE_VT_API_KEY", ""))
+    threat_auto_check: bool = field(default_factory=lambda: _get_bool("NETSCOPE_THREAT_AUTOCHECK", False))
+    suricata_eve_path: str = field(default_factory=lambda: _get("NETSCOPE_SURICATA_EVE", ""))
+    zeek_log_dir: str = field(default_factory=lambda: _get("NETSCOPE_ZEEK_DIR", ""))
+    yara_rules_path: str = field(default_factory=lambda: _get("NETSCOPE_YARA_RULES", ""))
 
 
 _load_dotenv()
