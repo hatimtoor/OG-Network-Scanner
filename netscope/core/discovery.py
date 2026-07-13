@@ -85,6 +85,53 @@ def detect_subnet() -> str:
         return f"{local_ip.rsplit('.', 1)[0]}.0/24"
 
 
+def detect_all_subnets() -> list[str]:
+    """Detect every local IPv4 subnet (one per active adapter) as CIDRs."""
+    subnets: list[str] = []
+    try:
+        if IS_WINDOWS:
+            out = subprocess.run(
+                ["ipconfig"], capture_output=True, text=True, timeout=8
+            ).stdout
+            blocks = re.split(r"\r?\n\r?\n", out)
+            for block in blocks:
+                ip_m = re.search(r"IPv4 Address[ .]*:\s*([\d.]+)", block)
+                mask_m = re.search(r"Subnet Mask[ .]*:\s*([\d.]+)", block)
+                if not (ip_m and mask_m):
+                    continue
+                ip, mask = ip_m.group(1), mask_m.group(1)
+                if ip.startswith(("127.", "169.254.")):
+                    continue
+                try:
+                    net = ipaddress.IPv4Network(f"{ip}/{mask}", strict=False)
+                    if net.num_addresses > 4096:
+                        net = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+                    cidr = str(net)
+                    if cidr not in subnets:
+                        subnets.append(cidr)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    if not subnets:
+        subnets = [detect_subnet()]
+    return subnets
+
+
+def get_scan_targets() -> list[str]:
+    """Return the list of subnets to scan, based on configuration.
+
+    Priority: explicit NETSCOPE_SUBNETS list > scan_all_local > single subnet.
+    """
+    if settings.subnets.strip():
+        targets = [s.strip() for s in settings.subnets.split(",") if s.strip()]
+        if targets:
+            return targets
+    if settings.scan_all_local:
+        return detect_all_subnets()
+    return [detect_subnet()]
+
+
 def get_gateway_ip() -> str:
     """Best-effort default gateway (the router)."""
     try:
