@@ -9,12 +9,23 @@ from . import discovery, identify, mdns, portscan
 
 
 def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict]:
-    """Run a complete scan and return a list of enriched device dicts."""
-    cidr = cidr or discovery.detect_subnet()
+    """Run a complete scan across all target subnets and return device dicts."""
+    targets = [cidr] if cidr else discovery.get_scan_targets()
     gateway = discovery.get_gateway_ip()
     do_ports = settings.port_scan_enabled if do_ports is None else do_ports
 
-    hosts = discovery.discover(cidr)
+    # Discover hosts across every target subnet, de-duplicated by IP.
+    hosts: list[discovery.Host] = []
+    seen_ips: set[str] = set()
+    for target in targets:
+        try:
+            for host in discovery.discover(target):
+                if host.ip not in seen_ips:
+                    seen_ips.add(host.ip)
+                    hosts.append(host)
+        except Exception:
+            continue
+
     mdns_map = mdns.browse(duration=3.0)
 
     def enrich(host: discovery.Host) -> dict:
