@@ -27,11 +27,15 @@
   <nav class="tabs">
     <button data-view="devices" class="active">Devices</button>
     <button data-view="topology">Topology</button>
+    <button data-view="traffic">Traffic</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
   </nav>
 
   <main>
     <section class="view active" id="view-devices">
+      <div class="toolbar">
+        <a class="export-btn" href="/api/export/devices.csv" download>⭳ Export devices (CSV)</a>
+      </div>
       <div class="grid" id="deviceGrid"></div>
       <div class="empty" id="devicesEmpty">Scanning your network… devices will appear here.</div>
     </section>
@@ -41,7 +45,28 @@
       <div class="legend" id="legend"></div>
     </section>
 
+    <section class="view" id="view-traffic">
+      <div class="tp-cards">
+        <div class="tp-card"><span class="label">Download</span><span class="value" id="tpDown">—</span></div>
+        <div class="tp-card"><span class="label">Upload</span><span class="value" id="tpUp">—</span></div>
+        <div class="tp-card"><span class="label">Active connections</span><span class="value" id="tpConns">—</span></div>
+      </div>
+      <div class="chart-wrap">
+        <svg id="tpChart" viewBox="0 0 800 220" preserveAspectRatio="none"></svg>
+        <div class="chart-legend"><span class="dl">■ Download</span><span class="ul">■ Upload</span></div>
+      </div>
+      <h3 class="section-title">Active connections <span class="muted" id="connNote">(this machine)</span></h3>
+      <div class="conn-table-wrap">
+        <table class="conn-table" id="connTable"><thead><tr>
+          <th>Process</th><th>Local</th><th>Remote</th><th>Port</th><th>Status</th><th>Device</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
     <section class="view" id="view-alerts">
+      <div class="toolbar">
+        <a class="export-btn" href="/api/export/events.csv" download>⭳ Export alerts (CSV)</a>
+      </div>
       <div class="events" id="eventList"></div>
       <div class="empty" id="alertsEmpty">No alerts yet.</div>
     </section>
