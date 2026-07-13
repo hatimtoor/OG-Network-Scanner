@@ -300,6 +300,74 @@ function fmtRate(bytesPerSec) {
 }
 
 // --------------------------------------------------------------------------- //
+// Security
+// --------------------------------------------------------------------------- //
+async function refreshSecurity() {
+  const [status, alerts] = await Promise.all([
+    getJSON("/api/security/status"),
+    getJSON("/api/security/ids-alerts?limit=100").catch(() => []),
+  ]);
+  renderSecStatus(status);
+  renderIdsAlerts(alerts);
+}
+
+function renderSecStatus(s) {
+  const chip = (on, label) =>
+    `<div class="sec-chip"><span class="dot ${on ? "on" : "off"}"></span>${label}: <b>${on ? "ready" : "not set"}</b></div>`;
+  document.getElementById("secStatus").innerHTML =
+    chip(s.virustotal, "VirusTotal") +
+    chip(s.sensor_configured, "IDS sensor") +
+    chip(s.yara, "YARA rules") +
+    chip(s.auto_check, "Auto threat-check");
+}
+
+function renderIdsAlerts(alerts) {
+  const list = document.getElementById("idsList");
+  document.getElementById("idsEmpty").style.display = alerts.length ? "none" : "block";
+  list.innerHTML = alerts.map((a) =>
+    `<div class="event ${a.severity}"><span class="etime">${enc(a.source)}</span>
+     <span class="emsg">${enc(a.signature || a.category)} <span class="sub">${enc(a.src_ip)} → ${enc(a.dest_ip)}</span></span></div>`
+  ).join("");
+}
+
+function verdictBlock(v) {
+  const cls = ["clean", "malicious", "suspicious"].includes(v.verdict) ? v.verdict : "unknown";
+  return `<span class="verdict ${cls}">${enc(v.verdict)}</span>
+    <div class="kv2">${enc(v.indicator || v.file || "")}<br>${enc(v.detail || v.vt_detail || "")}
+    ${v.sha256 ? "<br>sha256: " + enc(v.sha256) : ""}
+    ${v.yara_matches && v.yara_matches.length ? "<br>YARA: " + enc(v.yara_matches.join(", ")) : ""}</div>`;
+}
+
+async function doIpCheck() {
+  const ip = document.getElementById("ipInput").value.trim();
+  if (!ip) return;
+  const box = document.getElementById("ipResult");
+  box.innerHTML = "<span class='sub'>checking…</span>";
+  try {
+    const v = await api("/api/security/check-ip", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ip }),
+    });
+    box.innerHTML = verdictBlock(v);
+  } catch (e) { box.innerHTML = "<span class='sub'>check failed</span>"; }
+}
+
+async function doFileScan() {
+  const path = document.getElementById("fileInput").value.trim();
+  if (!path) return;
+  const box = document.getElementById("fileResult");
+  box.innerHTML = "<span class='sub'>scanning…</span>";
+  try {
+    const r = await api("/api/security/scan-file", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    box.innerHTML = r.error ? `<span class='sub'>${enc(r.error)}</span>`
+      : verdictBlock({ verdict: r.vt_verdict, file: r.file, vt_detail: r.vt_detail, sha256: r.sha256, yara_matches: r.yara_matches });
+  } catch (e) { box.innerHTML = "<span class='sub'>scan failed</span>"; }
+}
+
+// --------------------------------------------------------------------------- //
 // Tabs, WebSocket, utils
 // --------------------------------------------------------------------------- //
 function setupTabs() {
@@ -311,6 +379,7 @@ function setupTabs() {
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
       if (btn.dataset.view === "topology") renderTopology();
       if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
+      if (btn.dataset.view === "security") refreshSecurity().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
     })
   );
@@ -371,6 +440,8 @@ document.getElementById("scanBtn").onclick = async () => {
 document.getElementById("modalBackdrop").onclick = (e) => {
   if (e.target.id === "modalBackdrop") closeModal();
 };
+document.getElementById("ipCheckBtn").onclick = doIpCheck;
+document.getElementById("fileScanBtn").onclick = doFileScan;
 
 setupTabs();
 initDisclaimer();
