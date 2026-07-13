@@ -113,6 +113,30 @@ main { padding: 20px 28px 60px; }
 .event .emsg { font-size: 13.5px; }
 .empty { color: var(--muted); text-align: center; padding: 50px; }
 
+/* Toolbar + export */
+.toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.export-btn { text-decoration: none; color: var(--muted); border: 1px solid var(--border); background: var(--panel); padding: 7px 12px; border-radius: 8px; font-size: 12.5px; }
+.export-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* Traffic */
+.tp-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+.tp-card { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.tp-card .label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.tp-card .value { display: block; font-size: 26px; font-weight: 700; margin-top: 6px; }
+.chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 20px; }
+#tpChart { width: 100%; height: 220px; display: block; }
+.chart-legend { display: flex; gap: 18px; font-size: 12px; margin-top: 8px; }
+.chart-legend .dl { color: var(--accent); }
+.chart-legend .ul { color: var(--accent-2); }
+.section-title { font-size: 15px; margin: 8px 0 12px; }
+.section-title .muted { color: var(--muted); font-weight: 400; font-size: 12px; }
+.conn-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.conn-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.conn-table th { text-align: left; padding: 10px 12px; color: var(--muted); background: var(--panel-2); font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.5px; position: sticky; top: 0; }
+.conn-table td { padding: 9px 12px; border-top: 1px solid var(--border); }
+.conn-table tr:hover td { background: var(--panel); }
+.conn-table .proc { color: var(--accent); font-weight: 600; }
+
 /* Detail modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 50; }
 .modal-backdrop.open { display: flex; }
