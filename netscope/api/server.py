@@ -5,13 +5,16 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import csv
+import io
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import __app_name__, __version__
 from ..config import settings
-from ..core import discovery
+from ..core import discovery, traffic
 from ..core.monitor import Monitor
 from ..db import store
 
@@ -115,6 +118,62 @@ async def trigger_scan() -> dict:
     # Fire-and-forget so the request returns immediately.
     asyncio.create_task(monitor.scan_once())
     return {"status": "scan_started"}
+
+
+# --------------------------------------------------------------------------- #
+# Traffic & bandwidth
+# --------------------------------------------------------------------------- #
+@app.get("/api/traffic")
+async def get_traffic() -> dict:
+    conns = await asyncio.to_thread(traffic.get_connections, 200)
+    latest = monitor.latest_traffic or {}
+    return {
+        "throughput": {
+            "sent_rate": latest.get("sent_rate", 0.0),
+            "recv_rate": latest.get("recv_rate", 0.0),
+            "connections": latest.get("connections", len(conns)),
+        },
+        "per_device_conns": latest.get("per_device_conns", {}),
+        "connections": [c.__dict__ for c in conns],
+    }
+
+
+@app.get("/api/traffic/history")
+async def get_traffic_history(limit: int = 180) -> list[dict]:
+    return store.list_traffic_history(limit=limit)
+
+
+# --------------------------------------------------------------------------- #
+# Exports
+# --------------------------------------------------------------------------- #
+def _csv_response(rows: list[dict], columns: list[str], filename: str) -> Response:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/export/devices.csv")
+async def export_devices() -> Response:
+    rows = store.list_devices()
+    for r in rows:
+        r["open_ports"] = ",".join(str(p["port"]) for p in r.get("ports", []))
+    cols = ["ip", "mac", "display_name", "device_type", "os_guess", "vendor",
+            "confidence", "trusted", "is_online", "open_ports", "first_seen", "last_seen"]
+    return _csv_response(rows, cols, "netscope-devices.csv")
+
+
+@app.get("/api/export/events.csv")
+async def export_events() -> Response:
+    rows = store.list_events(limit=1000)
+    cols = ["ts", "severity", "type", "ip", "mac", "message"]
+    return _csv_response(rows, cols, "netscope-events.csv")
 
 
 # --------------------------------------------------------------------------- #
