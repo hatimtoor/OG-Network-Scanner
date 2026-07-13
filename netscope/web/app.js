@@ -219,6 +219,87 @@ function renderEvents() {
 }
 
 // --------------------------------------------------------------------------- //
+// Traffic
+// --------------------------------------------------------------------------- //
+let trafficHistory = [];
+
+async function refreshTraffic() {
+  const [t, hist] = await Promise.all([
+    getJSON("/api/traffic"),
+    getJSON("/api/traffic/history?limit=180"),
+  ]);
+  trafficHistory = hist;
+  renderTrafficCards(t.throughput);
+  renderTrafficChart();
+  renderConnTable(t.connections);
+}
+
+function renderTrafficCards(tp) {
+  if (!tp) return;
+  document.getElementById("tpDown").textContent = fmtRate(tp.recv_rate);
+  document.getElementById("tpUp").textContent = fmtRate(tp.sent_rate);
+  document.getElementById("tpConns").textContent = tp.connections ?? "—";
+}
+
+function renderTrafficChart() {
+  const svg = document.getElementById("tpChart");
+  const W = 800, H = 220, pad = 6;
+  const data = trafficHistory;
+  if (!data.length) { svg.innerHTML = ""; return; }
+  const maxRate = Math.max(1, ...data.map((d) => Math.max(d.recv_rate, d.sent_rate)));
+  const n = data.length;
+  const x = (i) => pad + (i * (W - 2 * pad)) / Math.max(1, n - 1);
+  const y = (v) => H - pad - (v / maxRate) * (H - 2 * pad);
+  const line = (key) => data.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
+  const area = (key, color) =>
+    `<path d="${line(key)} L${x(n - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z" fill="${color}" opacity="0.12"/>`;
+  svg.innerHTML =
+    `<line x1="0" y1="${H - pad}" x2="${W}" y2="${H - pad}" stroke="#243044"/>` +
+    area("recv_rate", "#4f9dff") + area("sent_rate", "#37e0a0") +
+    `<path d="${line("recv_rate")}" fill="none" stroke="#4f9dff" stroke-width="2"/>` +
+    `<path d="${line("sent_rate")}" fill="none" stroke="#37e0a0" stroke-width="2"/>` +
+    `<text x="8" y="16" fill="#8a97ab" font-size="11">peak ${fmtRate(maxRate)}</text>`;
+}
+
+function renderConnTable(conns) {
+  const tbody = document.querySelector("#connTable tbody");
+  if (!conns || !conns.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="sub" style="padding:16px">No active outbound connections.</td></tr>`;
+    return;
+  }
+  const byIp = {};
+  devices.forEach((d) => { byIp[d.ip] = d.display_name; });
+  const rows = conns.slice(0, 150).map((c) => {
+    const dev = byIp[c.remote_ip] ? enc(byIp[c.remote_ip]) : "";
+    return `<tr>
+      <td class="proc">${enc(c.process || "—")}</td>
+      <td>${enc(c.local)}</td>
+      <td>${enc(c.remote_ip)}</td>
+      <td>${enc(c.remote_port)}</td>
+      <td>${enc(c.status)}</td>
+      <td>${dev}</td>
+    </tr>`;
+  }).join("");
+  tbody.innerHTML = rows;
+}
+
+function pushTrafficPoint(tp) {
+  trafficHistory.push({ ts: new Date().toISOString(), sent_rate: tp.sent_rate, recv_rate: tp.recv_rate });
+  if (trafficHistory.length > 180) trafficHistory.shift();
+  if (document.getElementById("view-traffic").classList.contains("active")) {
+    renderTrafficCards({ ...tp });
+    renderTrafficChart();
+  }
+}
+
+function fmtRate(bytesPerSec) {
+  const b = bytesPerSec || 0;
+  if (b < 1024) return `${b.toFixed(0)} B/s`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB/s`;
+  return `${(b / 1024 / 1024).toFixed(2)} MB/s`;
+}
+
+// --------------------------------------------------------------------------- //
 // Tabs, WebSocket, utils
 // --------------------------------------------------------------------------- //
 function setupTabs() {
@@ -229,6 +310,7 @@ function setupTabs() {
       btn.classList.add("active");
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
       if (btn.dataset.view === "topology") renderTopology();
+      if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
     })
   );
@@ -237,7 +319,15 @@ function setupTabs() {
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onmessage = () => refreshAll();
+  ws.onmessage = (ev) => {
+    let msg = {};
+    try { msg = JSON.parse(ev.data); } catch (_) { return; }
+    if (msg.type === "traffic") {
+      pushTrafficPoint(msg.traffic);          // lightweight live update
+    } else {
+      refreshAll();                            // devices/events/status changed
+    }
+  };
   ws.onclose = () => setTimeout(connectWS, 3000);
   // keepalive
   setInterval(() => { try { ws.readyState === 1 && ws.send("ping"); } catch (_) {} }, 20000);
