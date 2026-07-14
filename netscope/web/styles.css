@@ -185,6 +185,13 @@ main { padding: 20px 28px 60px; }
 .sec-result .kv2 { margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.7; word-break: break-all; }
 .event.ids_alert, .event.threat { border-left-color: var(--crit); }
 
+/* AI assistant */
+.ai-answer { margin-top: 16px; min-height: 40px; }
+.ai-src { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ai-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+.ai-examples { margin-top: 16px; font-size: 12.5px; color: var(--muted); }
+.ai-examples a { color: var(--accent); text-decoration: none; }
+
 /* Login overlay */
 .login-overlay { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 100; }
 .login-overlay.open { display: flex; }
