@@ -661,6 +661,32 @@ async function doFileScan() {
 }
 
 // --------------------------------------------------------------------------- //
+// AI assistant
+// --------------------------------------------------------------------------- //
+async function refreshAssistant() {
+  try {
+    const s = await getJSON("/api/ai/status");
+    document.getElementById("aiNote").textContent = s.available
+      ? `(Claude ${s.model})` : "(rule-based — set NETSCOPE_ANTHROPIC_KEY for full AI)";
+  } catch (_) {}
+}
+
+async function askAI(q) {
+  const box = document.getElementById("aiAnswer");
+  const question = q || document.getElementById("aiInput").value.trim();
+  if (!question) return;
+  document.getElementById("aiInput").value = question;
+  box.innerHTML = '<span class="sub">Thinking…</span>';
+  try {
+    const r = await api("/api/ai", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    box.innerHTML = `<div class="ai-src">${r.source === "claude" ? "🤖 Claude" : "⚙ rule-based"}</div><div class="ai-text">${enc(r.answer).replace(/\n/g, "<br>")}</div>`;
+  } catch (e) { box.innerHTML = '<span class="sub">Assistant failed.</span>'; }
+}
+
+// --------------------------------------------------------------------------- //
 // Cases
 // --------------------------------------------------------------------------- //
 async function refreshCases() {
@@ -748,6 +774,7 @@ function setupTabs() {
       if (btn.dataset.view === "host") refreshHost().catch(() => {});
       if (btn.dataset.view === "security") refreshSecurity().catch(() => {});
       if (btn.dataset.view === "cases") refreshCases().catch(() => {});
+      if (btn.dataset.view === "assistant") refreshAssistant().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
     })
   );
@@ -814,6 +841,9 @@ document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
 document.getElementById("pcapToggle").onclick = togglePcap;
 document.getElementById("vulnBtn").onclick = scanHostVulns;
 document.getElementById("fimBtn").onclick = runFimScan;
+document.getElementById("aiBtn").onclick = () => askAI();
+document.getElementById("aiInput").addEventListener("keydown", (e) => { if (e.key === "Enter") askAI(); });
+document.querySelectorAll(".ai-ex").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); askAI(a.textContent); }));
 document.getElementById("loginBtn").onclick = doLogin;
 document.getElementById("loginPw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 document.getElementById("makeCaseBtn").onclick = createCaseFromSelected;
