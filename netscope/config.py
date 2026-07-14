@@ -167,6 +167,10 @@ class Settings:
     honeypot_ports: str = field(default_factory=lambda: _get("NETSCOPE_HONEYPOT_PORTS", "23,2323,3389,8081"))
     auth_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_AUTH", False))
     auth_password: str = field(default_factory=lambda: _get("NETSCOPE_PASSWORD", ""))
+    # Guard against exposing an unauthenticated instance on the network. Binding a
+    # non-loopback host with auth off is refused unless this is explicitly set.
+    allow_insecure_bind: bool = field(
+        default_factory=lambda: _get_bool("NETSCOPE_ALLOW_INSECURE_BIND", False))
     anthropic_key: str = field(default_factory=lambda: _get("NETSCOPE_ANTHROPIC_KEY", ""))
     ai_model: str = field(default_factory=lambda: _get("NETSCOPE_AI_MODEL", "claude-opus-4-8"))
 
