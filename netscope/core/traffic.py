@@ -15,6 +15,8 @@ from __future__ import annotations
 import socket
 from dataclasses import dataclass, field
 
+from .netutil import is_private_ip
+
 try:
     import psutil
 except Exception:  # pragma: no cover
@@ -73,7 +75,7 @@ class TrafficMeter:
 
 
 def _is_local_net(ip: str) -> bool:
-    return ip.startswith(("10.", "192.168.", "172.")) or ip.startswith("169.254.")
+    return is_private_ip(ip)
 
 
 def get_connections(limit: int = 200) -> list[Connection]:
