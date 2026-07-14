@@ -20,6 +20,7 @@ _IPV4 = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
 
 _ips: set[str] = set()
 _domains: set[str] = set()
+_hashes: set[str] = set()
 _lock = threading.Lock()
 _last_refresh: str = ""
 
@@ -49,6 +50,92 @@ def parse_feed(text: str) -> tuple[set[str], set[str]]:
     return ips, domains
 
 
+_HASH_RE = re.compile(r"^[a-fA-F0-9]{32,64}$")
+
+
+def parse_misp(data: dict) -> tuple[set[str], set[str], set[str]]:
+    """Parse a MISP restSearch response into (ips, domains, hashes)."""
+    ips: set[str] = set()
+    domains: set[str] = set()
+    hashes: set[str] = set()
+    # Attribute list may sit at top level or under 'response'.
+    attrs = data.get("Attribute") or data.get("response", {}).get("Attribute") or []
+    for a in attrs:
+        t = a.get("type", "")
+        v = (a.get("value", "") or "").strip()
+        if not v:
+            continue
+        if t in ("ip-dst", "ip-src", "ip"):
+            if _IPV4.match(v):
+                ips.add(v)
+        elif t in ("domain", "hostname"):
+            domains.add(v.lower().strip("."))
+        elif t in ("md5", "sha1", "sha256") and _HASH_RE.match(v):
+            hashes.add(v.lower())
+    return ips, domains, hashes
+
+
+def parse_stix(data: dict) -> tuple[set[str], set[str], set[str]]:
+    """Parse a STIX 2.x bundle's indicator patterns into (ips, domains, hashes)."""
+    ips: set[str] = set()
+    domains: set[str] = set()
+    hashes: set[str] = set()
+    for obj in data.get("objects", []):
+        if obj.get("type") != "indicator":
+            continue
+        pattern = obj.get("pattern", "")
+        for m in re.finditer(r"ipv4-addr:value\s*=\s*'([^']+)'", pattern):
+            if _IPV4.match(m.group(1)):
+                ips.add(m.group(1))
+        for m in re.finditer(r"domain-name:value\s*=\s*'([^']+)'", pattern):
+            domains.add(m.group(1).lower().strip("."))
+        for m in re.finditer(r"file:hashes\.'?(?:MD5|SHA-?1|SHA-?256)'?\s*=\s*'([^']+)'", pattern):
+            if _HASH_RE.match(m.group(1)):
+                hashes.add(m.group(1).lower())
+    return ips, domains, hashes
+
+
+def _fetch_misp() -> tuple[set[str], set[str], set[str]]:
+    if not (settings.misp_url and settings.misp_key):
+        return set(), set(), set()
+    try:
+        import requests
+
+        url = settings.misp_url.rstrip("/") + "/attributes/restSearch"
+        resp = requests.post(
+            url,
+            headers={"Authorization": settings.misp_key, "Accept": "application/json",
+                     "Content-Type": "application/json"},
+            json={"returnFormat": "json",
+                  "type": ["ip-dst", "ip-src", "domain", "hostname", "md5", "sha256"]},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return parse_misp(resp.json())
+    except Exception:
+        pass
+    return set(), set(), set()
+
+
+def _fetch_stix() -> tuple[set[str], set[str], set[str]]:
+    if not settings.stix_url:
+        return set(), set(), set()
+    try:
+        import requests
+
+        resp = requests.get(settings.stix_url, timeout=30)
+        if resp.status_code == 200:
+            return parse_stix(resp.json())
+    except Exception:
+        pass
+    return set(), set(), set()
+
+
+def check_hash(file_hash: str) -> bool:
+    with _lock:
+        return (file_hash or "").lower() in _hashes
+
+
 def load_cache() -> None:
     global _last_refresh
     try:
@@ -56,6 +143,7 @@ def load_cache() -> None:
         with _lock:
             _ips.update(data.get("ips", []))
             _domains.update(data.get("domains", []))
+            _hashes.update(data.get("hashes", []))
             _last_refresh = data.get("last_refresh", "")
     except Exception:
         pass
@@ -68,6 +156,7 @@ def refresh() -> dict:
 
     new_ips: set[str] = set()
     new_domains: set[str] = set()
+    new_hashes: set[str] = set()
     ok_feeds = 0
     for url in _feed_list():
         try:
@@ -80,19 +169,27 @@ def refresh() -> dict:
         except Exception:
             continue
 
+    # MISP + STIX/TAXII structured feeds (bring hash IOCs too).
+    for fetch in (_fetch_misp, _fetch_stix):
+        mi, md, mh = fetch()
+        if mi or md or mh:
+            new_ips |= mi; new_domains |= md; new_hashes |= mh; ok_feeds += 1
+
     global _last_refresh
     with _lock:
-        if new_ips or new_domains:
+        if new_ips or new_domains or new_hashes:
             _ips.clear(); _ips.update(new_ips)
             _domains.clear(); _domains.update(new_domains)
+            _hashes.clear(); _hashes.update(new_hashes)
         _last_refresh = datetime.now(timezone.utc).isoformat()
-        snapshot = {"ips": list(_ips), "domains": list(_domains), "last_refresh": _last_refresh}
+        snapshot = {"ips": list(_ips), "domains": list(_domains),
+                    "hashes": list(_hashes), "last_refresh": _last_refresh}
     try:
         _CACHE.write_text(json.dumps(snapshot), encoding="utf-8")
     except Exception:
         pass
     return {"feeds": ok_feeds, "ips": len(_ips), "domains": len(_domains),
-            "last_refresh": _last_refresh}
+            "hashes": len(_hashes), "last_refresh": _last_refresh}
 
 
 def check_ip(ip: str) -> bool:
@@ -118,8 +215,11 @@ def status() -> dict:
         return {
             "enabled": settings.feeds_enabled,
             "feeds": len(_feed_list()),
+            "misp": bool(settings.misp_url and settings.misp_key),
+            "stix": bool(settings.stix_url),
             "ip_indicators": len(_ips),
             "domain_indicators": len(_domains),
+            "hash_indicators": len(_hashes),
             "last_refresh": _last_refresh,
         }
 
