@@ -52,8 +52,15 @@ _VENDOR_HINTS = {
     CAMERA: ["hikvision", "dahua", "reolink", "wyze", "amcrest"],
     GAME: ["sony", "microsoft", "nintendo"],
     TV: ["lg electronics", "vizio", "roku", "tcl"],
-    COMPUTER: ["intel", "dell", "lenovo", "asustek", "micro-star", "gigabyte", "hon hai", "raspberry"],
+    # NOTE: contract manufacturers (Hon Hai/Foxconn, Intel Wi-Fi) are deliberately
+    # excluded — Foxconn assembles iPhones and Intel makes phone/tablet Wi-Fi chips,
+    # so treating them as "computer" mis-typed phones. Keep only PC-specific brands.
+    COMPUTER: ["dell", "lenovo", "micro-star", "gigabyte", "raspberry"],
 }
+
+# Listening services a phone/tablet essentially never runs. Their presence rules
+# out "just a phone"; their absence (with a randomized MAC) strongly implies one.
+_SERVER_PORTS = {22, 80, 139, 443, 445, 631, 3389, 5900, 8080, 9100, 32400}
 
 # Open-port signatures.
 _PORT_HINTS = {
@@ -162,11 +169,11 @@ def identify(
         if any(kw in lname for kw in kws):
             vote(dtype, 40, f"hostname matches '{dtype}'")
 
-    # Vendor keywords.
+    # Vendor keywords (weak signal — a brand hints at, but doesn't prove, a type).
     lvendor = vendor.lower()
     for dtype, kws in _VENDOR_HINTS.items():
         if any(kw in lvendor for kw in kws):
-            vote(dtype, 20, f"vendor '{vendor}' suggests {dtype}")
+            vote(dtype, 15, f"vendor '{vendor}' suggests {dtype}")
 
     # Open-port signatures.
     for port in open_ports:
@@ -182,6 +189,15 @@ def identify(
     os_guess = nmap_os or _ttl_os(ttl)
     if "windows" in os_guess.lower():
         vote(COMPUTER, 10, "OS looks like Windows")
+
+    # Phone lean: a randomized MAC with no listening services, on a non-Windows
+    # TTL, is almost always a phone or tablet on a home network. This is what
+    # rescues a modern phone from being mislabelled when it hides every other
+    # signal (no vendor, no hostname, no open ports).
+    has_server_port = any(p in _SERVER_PORTS for p in open_ports)
+    if (is_randomized_mac(mac) and not has_server_port
+            and "windows" not in os_guess.lower()):
+        vote(PHONE, 30, "randomized MAC with no server ports — typical of a phone/tablet")
 
     # Pick winner.
     if votes:
