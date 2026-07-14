@@ -158,6 +158,22 @@ def record_zeek_flows(rows: list[dict]) -> int:
     return new_count
 
 
+def device_profiles() -> dict[str, dict]:
+    """Per-device 'pattern of life': the external ports and remote-count it uses."""
+    if _conn is None:
+        return {}
+    with _lock:
+        rows = _conn.execute(
+            """SELECT local_ip,
+                      list(DISTINCT remote_port) AS ports,
+                      COUNT(DISTINCT remote_ip) AS remotes
+               FROM flows WHERE remote_is_local = FALSE AND local_ip <> ''
+               GROUP BY local_ip"""
+        ).fetchall()
+    return {r[0]: {"ports": sorted(int(p) for p in (r[1] or [])), "remotes": int(r[2] or 0)}
+            for r in rows}
+
+
 def device_bandwidth(limit: int = 50) -> list[dict]:
     """Per-device byte totals grouped by local IP (whole-network with a Zeek sensor)."""
     if _conn is None:
