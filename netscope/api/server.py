@@ -20,7 +20,7 @@ from ..agent import fim, hostfacts
 from ..capture import pcap
 from ..db import analytics, store
 from ..enrich import cve, deepscan
-from ..security import sensor, threatintel, yara_scan
+from ..security import feeds, sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -368,7 +368,18 @@ async def security_status() -> dict:
         "zeek_dir": settings.zeek_log_dir,
         "yara": yara_scan.yara_available(),
         "auto_check": settings.threat_auto_check,
+        "feeds": feeds.status(),
     }
+
+
+@app.get("/api/security/feeds")
+async def get_feeds() -> dict:
+    return feeds.status()
+
+
+@app.post("/api/security/feeds/refresh")
+async def refresh_feeds() -> dict:
+    return await asyncio.to_thread(feeds.refresh)
 
 
 @app.get("/api/security/ids-alerts")
