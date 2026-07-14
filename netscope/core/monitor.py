@@ -11,7 +11,7 @@ from ..notify import notify
 from ..agent import fim
 from ..detect import behavioral, dns_analytics
 from ..enrich import passive
-from ..security import sensor, threatintel
+from ..security import feeds, sensor, threatintel, yara_scan
 from . import scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
@@ -37,6 +37,9 @@ class Monitor:
         self._fired_detections: set[str] = set()
         self._fired_domains: set[str] = set()
         self._last_fim: float = 0.0
+        self._last_feed_refresh: float = -1e9
+        self._feed_hits: set[str] = set()
+        self._scanned_files: set[str] = set()
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -135,9 +138,11 @@ class Monitor:
             try:
                 await self.scan_once()
                 await self._poll_security()
+                await self._run_feeds()
                 await self._run_behavioral()
                 await self._run_dns_detection()
                 await self._run_fim()
+                await self._run_extract_scan()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
@@ -222,6 +227,56 @@ class Monitor:
                 notify("Malicious connection detected", msg)
                 await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
 
+    async def _run_feeds(self) -> None:
+        """Refresh threat-intel feeds on schedule and match against connections."""
+        if not settings.feeds_enabled:
+            return
+        if self._last_feed_refresh < 0:
+            await asyncio.to_thread(feeds.load_cache)
+        due = time.monotonic() - self._last_feed_refresh >= settings.feed_refresh_hours * 3600
+        if due:
+            self._last_feed_refresh = time.monotonic()
+            await asyncio.to_thread(feeds.refresh)
+        if not feeds.available():
+            return
+        try:
+            conns = await asyncio.to_thread(traffic.get_connections, 200)
+        except Exception:
+            return
+        for c in conns:
+            ip = c.remote_ip
+            if not ip or ip in self._feed_hits or traffic._is_local_net(ip):
+                continue
+            if feeds.check_ip(ip):
+                self._feed_hits.add(ip)
+                msg = f"Connection to known-bad IP {ip} (threat-intel feed match) via {c.process}"
+                store.add_event("threat_feed", msg, severity="critical", ip=ip, mitre="T1071")
+                notify("Malicious IP contacted", msg)
+                await self._emit({"type": "threat", "ip": ip, "verdict": "feed"})
+
+    async def _run_extract_scan(self) -> None:
+        """Scan files Zeek/Strelka extracted from traffic for malware (R17)."""
+        import os
+        if not settings.extract_dir or not os.path.isdir(settings.extract_dir):
+            return
+        try:
+            for name in os.listdir(settings.extract_dir):
+                path = os.path.join(settings.extract_dir, name)
+                if path in self._scanned_files or not os.path.isfile(path):
+                    continue
+                self._scanned_files.add(path)
+                res = await asyncio.to_thread(yara_scan.scan_file, path, True)
+                bad = res.vt_verdict == "malicious" or res.yara_matches
+                if bad:
+                    detail = res.vt_verdict
+                    if res.yara_matches:
+                        detail += " / YARA:" + ",".join(res.yara_matches)
+                    store.add_event("malware_file", f"Malicious extracted file {name} ({detail})",
+                                    severity="critical", mitre="T1105")
+                    notify("Malware in traffic", f"{name}: {detail}")
+        except Exception:
+            pass
+
     async def _run_fim(self) -> None:
         """Periodic file-integrity scan; alerts on modified/deleted watched files."""
         if not (settings.host_agent_enabled and fim.configured()):
@@ -255,6 +310,11 @@ class Monitor:
             if domain in self._fired_domains:
                 continue
             self._fired_domains.add(domain)
+            if settings.feeds_enabled and feeds.check_domain(domain):
+                store.add_event("threat_feed", f"DNS query to known-bad domain {domain} (feed match)",
+                                severity="critical", ip=domains[domain].get("src", ""), mitre="T1071")
+                notify("Malicious domain queried", domain)
+                continue
             verdict = dns_analytics.analyze_domain(domain)
             if not verdict.suspicious:
                 continue
