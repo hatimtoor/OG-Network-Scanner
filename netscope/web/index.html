@@ -29,6 +29,7 @@
     <button data-view="devices" class="active">Devices</button>
     <button data-view="topology">Topology</button>
     <button data-view="traffic">Traffic</button>
+    <button data-view="hunting">Hunting</button>
     <button data-view="security">Security</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
   </nav>
@@ -62,6 +63,28 @@
         <table class="conn-table" id="connTable"><thead><tr>
           <th>Process</th><th>Local</th><th>Remote</th><th>Port</th><th>Status</th><th>Device</th>
         </tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="view" id="view-hunting">
+      <div class="tp-cards" id="flowStats"></div>
+      <div class="hunt-grid">
+        <div class="hunt-main">
+          <div class="hunt-bar">
+            <input type="text" id="flowSearch" placeholder="Search flows (process, IP)…" />
+            <label class="toggle"><input type="checkbox" id="flowExternal" checked /> External only</label>
+            <button class="primary" id="flowSearchBtn">Search</button>
+          </div>
+          <div class="conn-table-wrap">
+            <table class="conn-table" id="flowTable"><thead><tr>
+              <th>Process</th><th>Local</th><th>Remote IP</th><th>Port</th><th>Seen</th><th>First</th><th>Last</th>
+            </tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+        <div class="hunt-side">
+          <h3 class="section-title">Top external talkers</h3>
+          <div id="topTalkers"></div>
+        </div>
       </div>
     </section>
 
