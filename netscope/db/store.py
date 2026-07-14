@@ -223,6 +223,39 @@ def list_events(limit: int = 100) -> list[dict]:
         return [_event_to_dict(e) for e in events]
 
 
+def dashboard_counts(limit: int = 2000) -> dict:
+    """Aggregate recent events by severity, type, and MITRE technique."""
+    with get_session() as session:
+        events = session.exec(select(Event).order_by(Event.ts.desc()).limit(limit)).all()
+    sev: dict[str, int] = {}
+    typ: dict[str, int] = {}
+    mit: dict[str, int] = {}
+    for e in events:
+        sev[e.severity] = sev.get(e.severity, 0) + 1
+        typ[e.type] = typ.get(e.type, 0) + 1
+        if e.mitre:
+            mit[e.mitre] = mit.get(e.mitre, 0) + 1
+    top = lambda d: sorted(({"name": k, "count": v} for k, v in d.items()),
+                           key=lambda x: x["count"], reverse=True)
+    return {"total": len(events), "severity": sev,
+            "types": top(typ)[:12], "mitre": top(mit)[:12]}
+
+
+def search_events(q: str, limit: int = 50) -> list[dict]:
+    if not q:
+        return []
+    like = f"%{q.lower()}%"
+    with get_session() as session:
+        events = session.exec(
+            select(Event).order_by(Event.ts.desc()).limit(500)
+        ).all()
+    ql = q.lower()
+    hits = [e for e in events
+            if ql in (e.message or "").lower() or ql in (e.type or "")
+            or ql in (e.ip or "") or ql in (e.mitre or "").lower()]
+    return [_event_to_dict(e) for e in hits[:limit]]
+
+
 def acknowledge_events() -> int:
     with get_session() as session:
         events = session.exec(select(Event).where(Event.acknowledged == False)).all()  # noqa: E712
