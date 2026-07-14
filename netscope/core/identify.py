@@ -101,6 +101,35 @@ def _ttl_os(ttl: int | None) -> str:
     return ""
 
 
+def fingerprint(hostname: str = "", open_ports: list[int] | None = None,
+                mdns_services: list[str] | None = None, dhcp_os: str = "") -> str:
+    """A stable, MAC-independent device signature.
+
+    Combines the signals a device keeps across a MAC change — its hostname, open
+    port profile, advertised mDNS service types, and DHCP-derived OS. Returns ''
+    when there isn't enough distinctive signal to fingerprint safely (so we never
+    correlate two blank devices as "the same"). Used to spot a device that
+    randomizes its MAC to evade tracking.
+    """
+    import hashlib
+
+    hostname = (hostname or "").strip().lower()
+    ports = ",".join(str(p) for p in sorted(set(open_ports or [])))
+    # mDNS service *types* (e.g. "_airplay._tcp.local." -> "_airplay").
+    svc_types = sorted({s.lstrip("_").split(".")[0].split("_")[0] or s
+                        for s in (mdns_services or []) if s})
+    svcs = ",".join(svc_types)
+    dhcp_os = (dhcp_os or "").strip().lower()
+
+    # Require a hostname, or at least two independent signals, to be meaningful.
+    strong = bool(hostname)
+    weak_count = sum(1 for x in (ports, svcs, dhcp_os) if x)
+    if not (strong or weak_count >= 2):
+        return ""
+    sig = "|".join([hostname, ports, svcs, dhcp_os])
+    return hashlib.sha1(sig.encode()).hexdigest()[:16]
+
+
 def identify(
     *,
     mac: str,
