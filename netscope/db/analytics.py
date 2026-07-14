@@ -70,6 +70,15 @@ def init() -> None:
             if name not in cols:
                 _conn.execute(f"ALTER TABLE flows ADD COLUMN {name} {ddl}")
 
+        # Indexed packets from captured PCAPs (mini-Arkime search).
+        _conn.execute(
+            """CREATE TABLE IF NOT EXISTS packets (
+                ts TIMESTAMP, src_ip VARCHAR, dst_ip VARCHAR,
+                src_port INTEGER, dst_port INTEGER, protocol VARCHAR,
+                length INTEGER, source_file VARCHAR, pkt_no BIGINT
+            )"""
+        )
+
 
 def available() -> bool:
     return _conn is not None
@@ -334,6 +343,69 @@ def beacon_candidates(min_samples: int = 30, min_duration_s: int = 600) -> list[
          "samples": r[4], "duration_s": r[5]}
         for r in rows
     ]
+
+
+# --------------------------------------------------------------------------- #
+# Packet index (from captured PCAPs)
+# --------------------------------------------------------------------------- #
+def record_packets(rows: list[tuple]) -> int:
+    """Bulk-insert parsed packet rows (ts, src, dst, sport, dport, proto, len, file, no)."""
+    if _conn is None or not rows:
+        return 0
+    with _lock:
+        _conn.executemany(
+            "INSERT INTO packets VALUES (?,?,?,?,?,?,?,?,?)", rows
+        )
+    return len(rows)
+
+
+def indexed_pcap_files() -> list[str]:
+    if _conn is None:
+        return []
+    with _lock:
+        return [r[0] for r in _conn.execute(
+            "SELECT DISTINCT source_file FROM packets").fetchall()]
+
+
+def search_packets(ip: str = "", port: int | None = None, protocol: str = "",
+                   source_file: str = "", limit: int = 300) -> list[dict]:
+    if _conn is None:
+        return []
+    where, params = [], []
+    if ip:
+        where.append("(src_ip = ? OR dst_ip = ?)"); params += [ip, ip]
+    if port is not None:
+        where.append("(src_port = ? OR dst_port = ?)"); params += [port, port]
+    if protocol:
+        where.append("protocol = ?"); params.append(protocol.upper())
+    if source_file:
+        where.append("source_file = ?"); params.append(source_file)
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    with _lock:
+        rows = _conn.execute(
+            f"""SELECT ts, src_ip, dst_ip, src_port, dst_port, protocol, length, source_file
+                FROM packets {clause} ORDER BY ts DESC LIMIT ?""",
+            params + [limit],
+        ).fetchall()
+    return [
+        {"ts": r[0].isoformat() if r[0] else None, "src_ip": r[1], "dst_ip": r[2],
+         "src_port": r[3], "dst_port": r[4], "protocol": r[5], "length": r[6],
+         "source_file": r[7]}
+        for r in rows
+    ]
+
+
+def packet_stats() -> dict:
+    if _conn is None:
+        return {"total": 0, "files": 0}
+    with _lock:
+        total = _conn.execute("SELECT COUNT(*) FROM packets").fetchone()[0]
+        files = _conn.execute("SELECT COUNT(DISTINCT source_file) FROM packets").fetchone()[0]
+        protos = _conn.execute(
+            "SELECT protocol, COUNT(*) c FROM packets GROUP BY protocol ORDER BY c DESC LIMIT 6"
+        ).fetchall()
+    return {"total": total, "files": files,
+            "protocols": [{"protocol": p[0], "count": p[1]} for p in protos]}
 
 
 def prune(retention_days: int | None = None) -> int:
