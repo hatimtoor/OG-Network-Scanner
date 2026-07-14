@@ -150,6 +150,16 @@
           <span class="sub" id="pcapStatus"></span>
         </div>
         <div id="pcapFiles" class="kv2"></div>
+        <h3 class="section-title" style="margin-top:14px">Packet search <span class="muted" id="pktNote"></span></h3>
+        <div class="row">
+          <input type="text" id="pktSearch" placeholder="IP or port to search indexed packets…" />
+          <button class="export-btn" id="pktBtn">Search</button>
+        </div>
+        <div class="conn-table-wrap" style="margin-top:8px">
+          <table class="conn-table" id="pktTable"><thead><tr>
+            <th>Time</th><th>Src</th><th>Dst</th><th>Sport</th><th>Dport</th><th>Proto</th><th>Len</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
       </div>
 
       <h3 class="section-title">IDS alerts <span class="muted" id="idsNote">(Suricata / Zeek)</span></h3>
