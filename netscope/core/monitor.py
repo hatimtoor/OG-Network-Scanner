@@ -6,7 +6,7 @@ import time
 from typing import Awaitable, Callable
 
 from ..config import RISKY_PORTS, settings
-from ..db import store
+from ..db import analytics, store
 from ..notify import notify
 from ..enrich import passive
 from ..security import sensor, threatintel
@@ -190,6 +190,8 @@ class Monitor:
                     tp.sent_rate, tp.recv_rate, tp.bytes_sent, tp.bytes_recv,
                     len(snap.connections),
                 )
+                if settings.flow_record:
+                    await asyncio.to_thread(analytics.record_connections, snap.connections)
                 await self._emit({"type": "traffic", "traffic": {
                     "sent_rate": tp.sent_rate, "recv_rate": tp.recv_rate,
                     "connections": len(snap.connections),
@@ -197,6 +199,8 @@ class Monitor:
                 sample_count += 1
                 if sample_count % 100 == 0:
                     await asyncio.to_thread(store.prune_traffic)
+                    if settings.flow_record:
+                        await asyncio.to_thread(analytics.prune)
             except Exception:
                 pass
             await asyncio.sleep(settings.traffic_interval)
