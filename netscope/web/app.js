@@ -353,13 +353,28 @@ function renderEvents() {
   document.getElementById("alertsEmpty").style.display = events.length ? "none" : "block";
   const unack = events.filter((e) => !e.acknowledged && e.severity !== "info").length;
   document.getElementById("alertCount").textContent = unack ? `(${unack})` : "";
-  list.innerHTML = events
-    .map((e) => `<div class="event ${e.severity}">
-      <input type="checkbox" class="ev-check" data-id="${e.id}" title="select for case"/>
-      <span class="etime">${fmtTime(e.ts)}</span>
-      <span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}${e.case_id ? ` <span class="case-tag">case #${e.case_id}</span>` : ""}
-      ${playbookHtml(e.playbook)}</span></div>`)
-    .join("");
+  list.innerHTML = events.map(eventRow).join("");
+}
+
+function eventRow(e) {
+  const title = e.friendly_title || e.type;
+  const sevLabel = e.severity_label || e.severity;
+  const meaning = e.plain_meaning
+    ? `<div class="ev-plain"><span class="ev-lbl">What this means</span> ${enc(e.plain_meaning)}</div>` : "";
+  const action = e.plain_action
+    ? `<div class="ev-action"><span class="ev-lbl">What to do</span> ${enc(e.plain_action)}</div>` : "";
+  return `<div class="event ${e.severity}">
+    <input type="checkbox" class="ev-check" data-id="${e.id}" title="select for case"/>
+    <div class="ev-main">
+      <div class="ev-head">
+        <span class="ev-pill ${e.severity}">${enc(sevLabel)}</span>
+        <span class="ev-title">${enc(title)}</span>
+        <span class="etime">${fmtTime(e.ts)}</span>
+      </div>
+      <div class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}${e.case_id ? ` <span class="case-tag">case #${e.case_id}</span>` : ""}</div>
+      ${meaning}${action}
+      ${playbookHtml(e.playbook)}
+    </div></div>`;
 }
 
 function playbookHtml(pb) {
