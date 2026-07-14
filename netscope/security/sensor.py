@@ -181,6 +181,20 @@ def poll_new_conn_flows() -> list[dict]:
     return out
 
 
+def poll_new_http() -> list[dict]:
+    """New Zeek http.log rows -> [{ip, user_agent}] for User-Agent identification."""
+    if not settings.zeek_log_dir:
+        return []
+    path = os.path.join(settings.zeek_log_dir, "http.log")
+    out = []
+    for r in _read_new_zeek_rows(path):
+        ua = r.get("user_agent", "").strip()
+        ip = r.get("id.orig_h", "").strip()
+        if ua and ua != "-" and ip:
+            out.append({"ip": ip, "user_agent": ua})
+    return out
+
+
 def poll_new_dns_names() -> list[str]:
     """New domains from Zeek dns.log."""
     if not settings.zeek_log_dir:
