@@ -14,6 +14,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
+from ..core.netutil import is_private_ip
 
 try:
     import duckdb
@@ -85,7 +86,7 @@ def available() -> bool:
 
 
 def _is_local(ip: str) -> bool:
-    return ip.startswith(("10.", "192.168.", "172.", "169.254.", "127."))
+    return is_private_ip(ip)
 
 
 def record_connections(connections: list) -> int:
