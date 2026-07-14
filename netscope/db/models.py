@@ -58,6 +58,19 @@ class TrafficSample(SQLModel, table=True):
     connections: int = Field(default=0)     # active connection count
 
 
+class Case(SQLModel, table=True):
+    """An investigation grouping related events (basic incident response)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str = Field(default="Untitled case")
+    status: str = Field(default="open")        # open | investigating | closed
+    severity: str = Field(default="info")      # info | warning | critical
+    owner: str = Field(default="")
+    notes: str = Field(default="")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class Event(SQLModel, table=True):
     """An alert / audit event (new device, online/offline, risky port)."""
 
