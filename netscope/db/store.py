@@ -8,6 +8,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from ..config import settings
 from ..core import oui
+from .. import explain
 from .models import Case, Device, Event, TrafficSample, utcnow
 
 _engine = create_engine(
@@ -358,6 +359,7 @@ def _case_to_dict(c: Case, session: Session) -> dict:
 
 
 def _event_to_dict(e: Event) -> dict:
+    plain = explain.explain(e.type, e.severity)
     return {
         "id": e.id,
         "ts": e.ts.isoformat() if e.ts else None,
@@ -369,6 +371,11 @@ def _event_to_dict(e: Event) -> dict:
         "acknowledged": e.acknowledged,
         "mitre": e.mitre or "",
         "case_id": e.case_id,
+        # Plain-language explanation so non-technical users understand the alert.
+        "friendly_title": plain["friendly_title"],
+        "severity_label": plain["severity_label"],
+        "plain_meaning": plain["meaning"],
+        "plain_action": plain["action"],
     }
 
 
