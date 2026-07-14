@@ -6,6 +6,7 @@ import time
 from typing import Awaitable, Callable
 
 from ..config import RISKY_PORTS, settings
+from .. import explain
 from ..db import analytics, store
 from ..notify import notify, send_html_email
 from ..agent import fim
@@ -105,7 +106,8 @@ class Monitor:
                     "new_device", msg, severity="warning",
                     mac=record.mac, ip=record.ip,
                 )
-                notify("New device on your network", msg)
+                notify(explain.friendly_title("new_device"),
+                       explain.notify_body("new_device", msg, "warning"))
                 await self._emit({"type": "new_device", "device": store.get_device(key)})
 
                 # MAC-randomization awareness. A device that rotates its MAC shows
@@ -126,7 +128,8 @@ class Monitor:
                         "mac_rotation", rot, severity="warning",
                         mac=record.mac, ip=record.ip,
                     )
-                    notify("Device changed its MAC address", rot)
+                    notify(explain.friendly_title("mac_rotation"),
+                           explain.notify_body("mac_rotation", rot, "warning"))
                 elif oui.is_randomized_mac(record.mac):
                     store.add_event(
                         "randomized_mac",
@@ -229,7 +232,8 @@ class Monitor:
             msg = f"[{a.source}] {a.signature} ({a.src_ip} -> {a.dest_ip})"
             store.add_event("ids_alert", msg, severity=a.severity, ip=a.src_ip)
             if a.severity in ("warning", "critical"):
-                notify("IDS alert", a.signature or msg)
+                notify(explain.friendly_title("ids_alert"),
+                       explain.notify_body("ids_alert", a.signature or msg, a.severity))
         if alerts:
             await self._emit({"type": "ids_alerts", "count": len(alerts)})
 
@@ -286,7 +290,8 @@ class Monitor:
             if verdict.verdict in ("malicious", "suspicious"):
                 msg = f"Connection to {verdict.verdict} IP {ip} ({verdict.detail})"
                 store.add_event("threat", msg, severity="critical", ip=ip)
-                notify("Malicious connection detected", msg)
+                notify(explain.friendly_title("threat"),
+                       explain.notify_body("threat", msg, "critical"))
                 await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
 
     async def _run_scheduled_report(self) -> None:
@@ -330,7 +335,8 @@ class Monitor:
                 self._feed_hits.add(ip)
                 msg = f"Connection to known-bad IP {ip} (threat-intel feed match) via {c.process}"
                 store.add_event("threat_feed", msg, severity="critical", ip=ip, mitre="T1071")
-                notify("Malicious IP contacted", msg)
+                notify(explain.friendly_title("threat_feed"),
+                       explain.notify_body("threat_feed", msg, "critical"))
                 await self._emit({"type": "threat", "ip": ip, "verdict": "feed"})
 
     async def _run_extract_scan(self) -> None:
