@@ -363,6 +363,60 @@ function fmtRate(bytesPerSec) {
 }
 
 // --------------------------------------------------------------------------- //
+// Hunting (flows)
+// --------------------------------------------------------------------------- //
+async function refreshHunting() {
+  const [stats, top] = await Promise.all([
+    getJSON("/api/flows/stats"),
+    getJSON("/api/flows/top?limit=15"),
+  ]);
+  renderFlowStats(stats);
+  renderTopTalkers(top);
+  await runFlowSearch();
+}
+
+function renderFlowStats(s) {
+  const el = document.getElementById("flowStats");
+  if (!s || !s.available) { el.innerHTML = `<div class="sub">Flow store initializing… flows appear as traffic is observed.</div>`; return; }
+  const card = (label, val) => `<div class="tp-card"><span class="label">${label}</span><span class="value">${val}</span></div>`;
+  el.innerHTML = card("Total flows", s.total_flows) + card("Distinct remotes", s.distinct_remotes) + card("External flows", s.external_flows);
+}
+
+function renderTopTalkers(top) {
+  const el = document.getElementById("topTalkers");
+  if (!top || !top.length) { el.innerHTML = `<div class="sub">No external flows yet.</div>`; return; }
+  const max = Math.max(...top.map((t) => t.samples), 1);
+  el.innerHTML = top.map((t) =>
+    `<div class="talker" data-ip="${enc(t.remote_ip)}">
+       <span>${enc(t.remote_ip)}</span><span class="cnt">${t.flows} flows</span>
+       <div class="talker-bar" style="width:100%"><i style="width:${Math.round(t.samples / max * 100)}%"></i></div>
+     </div>`
+  ).join("");
+  el.querySelectorAll(".talker").forEach((d) =>
+    d.addEventListener("click", () => { document.getElementById("flowSearch").value = d.dataset.ip; runFlowSearch(); })
+  );
+}
+
+async function runFlowSearch() {
+  const search = document.getElementById("flowSearch").value.trim();
+  const external = document.getElementById("flowExternal").checked;
+  const flows = await getJSON(`/api/flows?search=${encodeURIComponent(search)}&external_only=${external}&limit=300`);
+  const tbody = document.querySelector("#flowTable tbody");
+  if (!flows.length) { tbody.innerHTML = `<tr><td colspan="7" class="sub" style="padding:16px">No flows match.</td></tr>`; return; }
+  tbody.innerHTML = flows.map((f) =>
+    `<tr>
+      <td class="proc">${enc(f.process || "—")}</td>
+      <td>${enc(f.local_ip)}</td>
+      <td>${enc(f.remote_ip)}${f.remote_is_local ? " <span class='sub'>(LAN)</span>" : ""}</td>
+      <td>${enc(f.remote_port)}</td>
+      <td>${f.samples}</td>
+      <td>${fmtTime(f.first_seen)}</td>
+      <td>${fmtTime(f.last_seen)}</td>
+    </tr>`
+  ).join("");
+}
+
+// --------------------------------------------------------------------------- //
 // Security
 // --------------------------------------------------------------------------- //
 async function refreshSecurity() {
@@ -442,6 +496,7 @@ function setupTabs() {
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
       if (btn.dataset.view === "topology") renderTopology();
       if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
+      if (btn.dataset.view === "hunting") refreshHunting().catch(() => {});
       if (btn.dataset.view === "security") refreshSecurity().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
     })
@@ -505,6 +560,8 @@ document.getElementById("modalBackdrop").onclick = (e) => {
 };
 document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
+document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
+document.getElementById("flowSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runFlowSearch(); });
 
 setupTabs();
 initDisclaimer();
