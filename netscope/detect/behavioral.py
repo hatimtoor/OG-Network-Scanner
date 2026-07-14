@@ -94,4 +94,23 @@ def run_detections() -> list[Detection]:
             score=min(100, 30 + r["samples"]),
         ))
 
+    # Data exfiltration: large upload volume to an external endpoint.
+    for r in analytics.exfil_candidates(min_bytes=settings.detect_exfil_bytes):
+        mb = r["bytes_sent"] / 1_000_000
+        proc = r["process"] or "a host"
+        out.append(Detection(
+            key=f"exfil:{r['local_ip']}:{r['remote_ip']}",
+            dtype="data_exfil", severity="critical",
+            title=f"Large upload to {r['remote_ip']} ({mb:.0f} MB)",
+            description=(
+                f"{proc} on {r['local_ip']} uploaded ~{mb:.0f} MB to external host "
+                f"{r['remote_ip']}:{r['remote_port']}. Large outbound transfers to an "
+                "external destination can indicate data exfiltration — verify it's expected."
+            ),
+            mitre_id="T1048",
+            entities={"local_ip": r["local_ip"], "remote_ip": r["remote_ip"],
+                      "process": r["process"]},
+            score=min(100, 50 + int(mb // 50)),
+        ))
+
     return out
