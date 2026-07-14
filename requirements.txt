@@ -16,5 +16,8 @@ mac-vendor-lookup==0.1.12  # offline OUI vendor database
 # Traffic monitoring
 psutil==6.1.1          # host throughput + active connection sampling
 
+# Analytics store (flows/events for hunting + behavioral detection)
+duckdb==1.1.3          # embedded columnar store for high-volume flow analytics
+
 # Notifications
 requests==2.32.3       # webhook (Telegram/Discord) + email helpers
