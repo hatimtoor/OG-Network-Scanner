@@ -277,7 +277,10 @@ function renderEvents() {
   const unack = events.filter((e) => !e.acknowledged && e.severity !== "info").length;
   document.getElementById("alertCount").textContent = unack ? `(${unack})` : "";
   list.innerHTML = events
-    .map((e) => `<div class="event ${e.severity}"><span class="etime">${fmtTime(e.ts)}</span><span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}</span></div>`)
+    .map((e) => `<div class="event ${e.severity}">
+      <input type="checkbox" class="ev-check" data-id="${e.id}" title="select for case"/>
+      <span class="etime">${fmtTime(e.ts)}</span>
+      <span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}${e.case_id ? ` <span class="case-tag">case #${e.case_id}</span>` : ""}</span></div>`)
     .join("");
 }
 
@@ -494,6 +497,78 @@ async function doFileScan() {
 }
 
 // --------------------------------------------------------------------------- //
+// Cases
+// --------------------------------------------------------------------------- //
+async function refreshCases() {
+  const cases = await getJSON("/api/cases");
+  const list = document.getElementById("caseList");
+  document.getElementById("casesEmpty").style.display = cases.length ? "none" : "block";
+  list.innerHTML = cases.map((c) =>
+    `<div class="case-row" data-id="${c.id}">
+       <span class="case-status ${enc(c.status)}">${enc(c.status)}</span>
+       <span class="case-title">#${c.id} ${enc(c.title)}</span>
+       <span class="badge ${c.severity === "critical" ? "risk" : ""}">${enc(c.severity)}</span>
+       <span class="sub">${c.event_count} event${c.event_count === 1 ? "" : "s"} · ${fmtTime(c.updated_at)}</span>
+     </div>`
+  ).join("");
+  list.querySelectorAll(".case-row").forEach((el) =>
+    el.addEventListener("click", () => openCase(el.dataset.id))
+  );
+}
+
+function selectedEventIds() {
+  return [...document.querySelectorAll(".ev-check:checked")].map((c) => parseInt(c.dataset.id, 10));
+}
+
+async function createCaseFromSelected() {
+  const ids = selectedEventIds();
+  const title = prompt(`Case title${ids.length ? ` (${ids.length} alerts)` : ""}:`, "Investigation");
+  if (title === null) return;
+  await api("/api/cases", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, event_ids: ids }),
+  });
+  document.querySelector("nav.tabs [data-view=cases]").click();
+}
+
+async function openCase(id) {
+  const c = await getJSON(`/api/cases/${id}`);
+  const events = (c.events || []).map((e) =>
+    `<div class="event ${e.severity}"><span class="etime">${fmtTime(e.ts)}</span><span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}</span></div>`
+  ).join("") || '<div class="sub">No linked events.</div>';
+  const opt = (v, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${v}</option>`;
+  document.getElementById("modal").innerHTML = `
+    <h2>🗂️ Case #${c.id}</h2>
+    <div class="row"><input type="text" id="caseTitle" value="${enc(c.title)}" /></div>
+    <div class="row" style="gap:16px">
+      <label class="sub">Status <select id="caseStatus">${["open","investigating","closed"].map((s)=>opt(s,c.status)).join("")}</select></label>
+      <label class="sub">Severity <select id="caseSev">${["info","warning","critical"].map((s)=>opt(s,c.severity)).join("")}</select></label>
+    </div>
+    <div class="row"><textarea id="caseNotes" placeholder="Investigation notes…" rows="4" style="width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px">${enc(c.notes || "")}</textarea></div>
+    <h3 class="section-title">Linked events (${(c.events||[]).length})</h3>
+    <div class="events">${events}</div>
+    <div class="actions">
+      <button class="ghost" id="closeModal">Close</button>
+      <button class="primary" id="saveCase" data-id="${c.id}">Save</button>
+    </div>`;
+  document.getElementById("modalBackdrop").classList.add("open");
+  document.getElementById("closeModal").onclick = closeModal;
+  document.getElementById("saveCase").onclick = async (e) => {
+    await api(`/api/cases/${e.target.dataset.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: document.getElementById("caseTitle").value,
+        status: document.getElementById("caseStatus").value,
+        severity: document.getElementById("caseSev").value,
+        notes: document.getElementById("caseNotes").value,
+      }),
+    });
+    closeModal();
+    refreshCases();
+  };
+}
+
+// --------------------------------------------------------------------------- //
 // Tabs, WebSocket, utils
 // --------------------------------------------------------------------------- //
 function setupTabs() {
@@ -507,6 +582,7 @@ function setupTabs() {
       if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
       if (btn.dataset.view === "hunting") refreshHunting().catch(() => {});
       if (btn.dataset.view === "security") refreshSecurity().catch(() => {});
+      if (btn.dataset.view === "cases") refreshCases().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
     })
   );
@@ -570,6 +646,8 @@ document.getElementById("modalBackdrop").onclick = (e) => {
 document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
 document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
+document.getElementById("makeCaseBtn").onclick = createCaseFromSelected;
+document.getElementById("newCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("flowSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runFlowSearch(); });
 
 setupTabs();
