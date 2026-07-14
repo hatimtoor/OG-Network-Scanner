@@ -13,7 +13,9 @@ NOTHING here runs automatically — the API layer invokes it on explicit request
 """
 from __future__ import annotations
 
+import ipaddress
 import json
+import re
 import subprocess
 import threading
 from datetime import datetime, timezone
@@ -24,6 +26,29 @@ from ..config import settings
 _STATE = Path(settings.db_path).resolve().parent / "quarantine_state.json"
 _arp_threads: dict[str, threading.Event] = {}
 _lock = threading.Lock()
+
+# Input validators — these values reach an SSH command line and an iptables rule
+# on a remote router, so they MUST be strictly validated to prevent command
+# injection (e.g. a MAC of "x; reboot").
+_MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+_USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
+_HOST_RE = re.compile(r"^[A-Za-z0-9.-]{1,253}$")
+
+
+def _valid_mac(mac: str) -> bool:
+    return bool(_MAC_RE.match(mac or ""))
+
+
+def _valid_user(user: str) -> bool:
+    return bool(_USER_RE.match(user or ""))
+
+
+def _valid_host(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return bool(_HOST_RE.match(host or ""))
 
 
 def _now() -> str:
@@ -101,6 +126,12 @@ def quarantine(ip: str, mac: str, method: str = "arp",
     if method == "openwrt":
         if not (router and mac):
             return {"ok": False, "error": "openwrt method needs router IP and device MAC"}
+        if not _valid_mac(mac):
+            return {"ok": False, "error": "invalid MAC address"}
+        if not _valid_host(router):
+            return {"ok": False, "error": "invalid router address"}
+        if not _valid_user(user):
+            return {"ok": False, "error": "invalid router username"}
         ok, detail = _run_router(router, user, _openwrt_cmd(mac, add=True))
         record["router"] = router
         record["detail"] = detail
@@ -109,6 +140,16 @@ def quarantine(ip: str, mac: str, method: str = "arp",
     elif method == "arp":
         if not (ip and gateway_ip and mac):
             return {"ok": False, "error": "arp method needs device ip+mac and gateway ip"}
+        if not (_valid_mac(mac) and _valid_host(ip) and _valid_host(gateway_ip)):
+            return {"ok": False, "error": "invalid device/gateway address or MAC"}
+        # Fail loudly if the raw-socket stack isn't available, rather than
+        # reporting success while the isolation thread silently no-ops.
+        try:
+            from scapy.all import get_if_hwaddr, conf  # type: ignore
+            get_if_hwaddr(conf.iface)
+        except Exception:
+            return {"ok": False, "error": "ARP isolation needs scapy + Npcap, which are "
+                                          "not available on this host"}
         stop = threading.Event()
         t = threading.Thread(target=_arp_isolate_loop, args=(ip, mac, gateway_ip, stop), daemon=True)
         with _lock:
