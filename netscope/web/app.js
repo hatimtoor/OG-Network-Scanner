@@ -20,8 +20,25 @@ let quarantinedKeys = new Set();
 // --------------------------------------------------------------------------- //
 async function api(path, opts) {
   const res = await fetch(path, opts);
+  if (res.status === 401 && path !== "/api/login") { showLogin(); throw new Error("auth"); }
   if (!res.ok) throw new Error(path + " → " + res.status);
   return res.json();
+}
+
+function showLogin() {
+  document.getElementById("loginOverlay").classList.add("open");
+}
+async function doLogin() {
+  const pw = document.getElementById("loginPw").value;
+  const err = document.getElementById("loginErr");
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (res.ok) { location.reload(); }
+    else { err.textContent = "Invalid password."; }
+  } catch (e) { err.textContent = "Login failed."; }
 }
 const getJSON = (p) => api(p);
 const patchJSON = (p, body) =>
@@ -510,6 +527,10 @@ async function refreshHost() {
       return `<div class="deep-kv"><span class="dk">${icon} ${enc(h.check)}</span><span class="dv">${enc(h.status)}</span></div>`;
     }).join("") || '<span class="sub">No checks.</span>';
 
+  getJSON("/api/compliance").then((c) => {
+    document.getElementById("compScore").textContent = `(${c.score}% · ${c.passed}/${c.total})`;
+  }).catch(() => {});
+
   document.getElementById("fimStatus").innerHTML = fimSt.configured
     ? `Watching ${fimSt.baseline_files} files across ${(fimSt.watched_paths||[]).length} path(s).`
     : "Not configured. Set NETSCOPE_FIM_PATHS to watch files.";
@@ -793,6 +814,8 @@ document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
 document.getElementById("pcapToggle").onclick = togglePcap;
 document.getElementById("vulnBtn").onclick = scanHostVulns;
 document.getElementById("fimBtn").onclick = runFimScan;
+document.getElementById("loginBtn").onclick = doLogin;
+document.getElementById("loginPw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 document.getElementById("makeCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("newCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("flowSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runFlowSearch(); });
