@@ -89,6 +89,22 @@ _PLAYBOOKS: dict[str, dict] = {
             "If not, treat the host as potentially compromised and investigate.",
         ],
     },
+    "honeypot": {
+        "summary": "A device connected to a decoy service (nothing legitimate should).",
+        "steps": [
+            "Identify the source device — it is scanning your network.",
+            "If it's not a device you control, treat it as hostile and quarantine it.",
+            "If it is yours, it may be compromised — investigate the process scanning.",
+        ],
+    },
+    "anomaly": {
+        "summary": "Traffic deviated sharply from the learned baseline.",
+        "steps": [
+            "Check what changed (a spike in up/download) and which host caused it.",
+            "Correlate with the Hunting tab flows around that time.",
+            "If unexplained, capture packets (PCAP) and investigate the host.",
+        ],
+    },
     "ids_alert": {
         "summary": "The IDS (Suricata/Zeek) matched a threat signature.",
         "steps": [
