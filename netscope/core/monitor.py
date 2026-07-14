@@ -11,7 +11,7 @@ from ..notify import notify, send_html_email
 from ..agent import fim
 from ..detect import anomaly, baseline, behavioral, dns_analytics
 from ..enrich import passive, useragent
-from ..security import feeds, sensor, threatintel, yara_scan
+from ..security import feeds, mitm, sensor, threatintel, yara_scan
 from . import report, scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
@@ -33,6 +33,7 @@ class Monitor:
         self.last_scan_iso: str | None = None
         self._meter = traffic.TrafficMeter()
         self.latest_traffic: dict | None = None
+        self.latest_router: list | None = None
         self._checked_ips: set[str] = set()
         self._fired_detections: set[str] = set()
         self._fired_domains: set[str] = set()
@@ -213,6 +214,17 @@ class Monitor:
             for h in await asyncio.to_thread(sensor.poll_new_http):
                 ua = useragent.parse(h["user_agent"])
                 store.merge_device_details_by_ip(h["ip"], {"user_agent": ua})
+            # Decrypted HTTPS from mitmproxy -> UA ID + domain threat check.
+            if mitm.configured():
+                for f in await asyncio.to_thread(mitm.poll_new_flows):
+                    if f.get("user_agent"):
+                        store.merge_device_details_by_ip(
+                            f["client"], {"user_agent": useragent.parse(f["user_agent"])})
+                    host = f.get("host", "")
+                    if host and settings.feeds_enabled and feeds.check_domain(host):
+                        store.add_event("threat_feed",
+                                        f"Decrypted request to known-bad host {host} from {f['client']}",
+                                        severity="critical", ip=f["client"], mitre="T1071")
             for domain in await asyncio.to_thread(sensor.poll_new_dns_names):
                 if domain not in self._fired_domains:
                     self._fired_domains.add(domain)
@@ -387,6 +399,11 @@ class Monitor:
                 )
                 if settings.flow_record:
                     await asyncio.to_thread(analytics.record_connections, snap.connections)
+                if settings.snmp_router:
+                    from ..enrich import snmp as _snmp
+                    self.latest_router = await asyncio.to_thread(
+                        _snmp.interface_rates, settings.snmp_router,
+                        settings.snmp_router_community, time.monotonic())
                 await self._emit({"type": "traffic", "traffic": {
                     "sent_rate": tp.sent_rate, "recv_rate": tp.recv_rate,
                     "connections": len(snap.connections),
