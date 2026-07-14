@@ -93,6 +93,12 @@ class Settings:
     flow_record: bool = field(default_factory=lambda: _get_bool("NETSCOPE_FLOW_RECORD", True))
     flow_retention_days: int = field(default_factory=lambda: _get_int("NETSCOPE_FLOW_RETENTION_DAYS", 7))
 
+    # Behavioral detection thresholds
+    behavioral_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_BEHAVIORAL", True))
+    detect_scan_hosts: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_SCAN_HOSTS", 25))
+    detect_scan_ports: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_SCAN_PORTS", 15))
+    detect_beacon_samples: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_BEACON_SAMPLES", 50))
+
     # Notifications
     notify_desktop: bool = field(default_factory=lambda: _get_bool("NETSCOPE_NOTIFY_DESKTOP", True))
     smtp_host: str = field(default_factory=lambda: _get("NETSCOPE_SMTP_HOST", ""))
