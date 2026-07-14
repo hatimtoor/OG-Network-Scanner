@@ -30,6 +30,7 @@
     <button data-view="topology">Topology</button>
     <button data-view="traffic">Traffic</button>
     <button data-view="hunting">Hunting</button>
+    <button data-view="host">Host</button>
     <button data-view="security">Security</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
     <button data-view="cases">Cases</button>
@@ -85,6 +86,26 @@
         <div class="hunt-side">
           <h3 class="section-title">Top external talkers</h3>
           <div id="topTalkers"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-host">
+      <div class="tp-cards" id="hostCards"></div>
+      <div class="hunt-grid">
+        <div class="hunt-main">
+          <h3 class="section-title">Listening ports</h3>
+          <div class="conn-table-wrap">
+            <table class="conn-table" id="portTable"><thead><tr><th>Port</th><th>Address</th><th>Process</th><th>PID</th></tr></thead><tbody></tbody></table>
+          </div>
+          <h3 class="section-title">Software vulnerabilities <button class="export-btn" id="vulnBtn">Scan inventory</button></h3>
+          <div id="hostVulns"><span class="sub">Click “Scan inventory” to match installed software against known CVEs.</span></div>
+        </div>
+        <div class="hunt-side">
+          <h3 class="section-title">Hardening</h3>
+          <div id="hardening"></div>
+          <h3 class="section-title" style="margin-top:18px">File integrity <button class="export-btn" id="fimBtn">Run scan</button></h3>
+          <div id="fimStatus" class="sub"></div>
         </div>
       </div>
     </section>
