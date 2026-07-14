@@ -71,6 +71,11 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
             nmap_os=nmap_os,
         )
 
+        fp = identify.fingerprint(
+            hostname=host.hostname, open_ports=open_ports,
+            mdns_services=services, dhcp_os=passive_fp.get("dhcp_os", ""),
+        )
+
         return {
             "mac": host.mac,
             "ip": host.ip,
@@ -80,6 +85,7 @@ def run_scan(cidr: str | None = None, do_ports: bool | None = None) -> list[dict
             "os_guess": ident.os_guess,
             "confidence": ident.confidence,
             "reasons": ident.reasons or [],
+            "fingerprint": fp,
             "ports": [asdict(p) for p in ports_result.ports],
             "scan_method": ports_result.method,
             "mdns_services": services,
