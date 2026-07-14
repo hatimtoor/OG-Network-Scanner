@@ -21,6 +21,8 @@ from ..capture import pcap
 from ..db import analytics, store
 from ..detect import playbooks
 from ..enrich import cve, deepscan
+from ..honeypot import honeypot
+from ..notify import notify
 from ..response import quarantine
 from ..security import feeds, sensor, threatintel, yara_scan
 
@@ -64,9 +66,21 @@ async def lifespan(app: FastAPI):
     monitor.start()
     if settings.pcap_enabled:
         pcap.manager.start()
+    if settings.honeypot_enabled:
+        honeypot.on_hit = _honeypot_hit
+        await honeypot.start()
     yield
+    await honeypot.stop()
     pcap.manager.stop()
     await monitor.stop()
+
+
+def _honeypot_hit(src_ip: str, port: int) -> None:
+    store.add_event(
+        "honeypot", f"Honeypot hit: {src_ip} connected to decoy port {port}",
+        severity="critical", ip=src_ip, mitre="T1595",
+    )
+    notify("Honeypot triggered", f"{src_ip} probed decoy port {port}")
 
 
 app = FastAPI(title=__app_name__, version=__version__, lifespan=lifespan)
@@ -438,6 +452,11 @@ async def security_status() -> dict:
 @app.get("/api/security/feeds")
 async def get_feeds() -> dict:
     return feeds.status()
+
+
+@app.get("/api/security/honeypot")
+async def get_honeypot() -> dict:
+    return honeypot.status()
 
 
 @app.post("/api/security/feeds/refresh")
