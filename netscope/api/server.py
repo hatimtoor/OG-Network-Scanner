@@ -363,6 +363,12 @@ async def get_flow_stats() -> dict:
     return await asyncio.to_thread(analytics.stats)
 
 
+@app.get("/api/router/interfaces")
+async def router_interfaces() -> dict:
+    return {"configured": bool(settings.snmp_router),
+            "interfaces": monitor.latest_router or []}
+
+
 @app.get("/api/flows/bandwidth")
 async def get_device_bandwidth(limit: int = 50) -> list[dict]:
     rows = await asyncio.to_thread(analytics.device_bandwidth, limit)
