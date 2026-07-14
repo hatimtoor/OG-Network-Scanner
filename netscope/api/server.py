@@ -16,9 +16,10 @@ from .. import __app_name__, __version__
 from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
+from ..agent import fim, hostfacts
 from ..capture import pcap
 from ..db import analytics, store
-from ..enrich import deepscan
+from ..enrich import cve, deepscan
 from ..security import sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -246,6 +247,43 @@ async def get_flow_stats() -> dict:
 # --------------------------------------------------------------------------- #
 # Packet capture (PCAP)
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Host agent (facts, FIM, inventory vulnerabilities)
+# --------------------------------------------------------------------------- #
+@app.get("/api/host/facts")
+async def host_facts() -> dict:
+    return await asyncio.to_thread(hostfacts.collect)
+
+
+@app.get("/api/host/fim")
+async def host_fim_status() -> dict:
+    return fim.status()
+
+
+@app.post("/api/host/fim/scan")
+async def host_fim_scan() -> dict:
+    result = await asyncio.to_thread(fim.scan)
+    if not result.get("first_run"):
+        for p in result.get("modified", []):
+            store.add_event("fim", f"File modified: {p}", severity="warning", mitre="T1565")
+        for p in result.get("deleted", []):
+            store.add_event("fim", f"File deleted: {p}", severity="warning", mitre="T1070")
+    return result
+
+
+@app.post("/api/host/vulns")
+async def host_vulns(body: dict):
+    software = (body or {}).get("software")
+    if not software:
+        facts = await asyncio.to_thread(hostfacts.collect)
+        software = facts.get("software", [])
+    # Cap products to respect NVD rate limits; prefer versioned entries.
+    hints = [f"{s['name']} {s['version']}".strip()
+             for s in software if s.get("version")][:12]
+    cves = await asyncio.to_thread(cve.correlate, hints, 12, 2)
+    return {"checked": len(hints), "cves": cves}
+
+
 @app.get("/api/pcap/status")
 async def pcap_status() -> dict:
     return pcap.manager.status()
