@@ -528,11 +528,14 @@ async function togglePcap() {
 function renderSecStatus(s) {
   const chip = (on, label) =>
     `<div class="sec-chip"><span class="dot ${on ? "on" : "off"}"></span>${label}: <b>${on ? "ready" : "not set"}</b></div>`;
+  const feeds = s.feeds || {};
+  const feedReady = (feeds.ip_indicators || 0) + (feeds.domain_indicators || 0) > 0;
   document.getElementById("secStatus").innerHTML =
     chip(s.virustotal, "VirusTotal") +
     chip(s.sensor_configured, "IDS sensor") +
     chip(s.yara, "YARA rules") +
-    chip(s.auto_check, "Auto threat-check");
+    chip(s.auto_check, "Auto threat-check") +
+    `<div class="sec-chip"><span class="dot ${feedReady ? "on" : "off"}"></span>Threat feeds: <b>${feedReady ? (feeds.ip_indicators + feeds.domain_indicators).toLocaleString() + " IOCs" : "loading"}</b></div>`;
 }
 
 function renderIdsAlerts(alerts) {
