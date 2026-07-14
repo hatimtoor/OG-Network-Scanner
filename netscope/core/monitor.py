@@ -7,7 +7,10 @@ from typing import Awaitable, Callable
 
 from ..config import RISKY_PORTS, settings
 from .. import explain
+from .. import log as _log
 from ..db import analytics, store
+
+_logger = _log.get_logger("monitor")
 from ..notify import notify, send_html_email
 from ..agent import fim
 from ..detect import anomaly, baseline, behavioral, dns_analytics
@@ -178,6 +181,7 @@ class Monitor:
                 await self._run_extract_scan()
                 await self._run_scheduled_report()
             except Exception as exc:  # keep the loop alive
+                _logger.exception("monitor loop iteration failed")
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
 
