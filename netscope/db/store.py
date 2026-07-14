@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from ..config import settings
-from .models import Device, Event, TrafficSample, utcnow
+from .models import Case, Device, Event, TrafficSample, utcnow
 
 _engine = create_engine(
     f"sqlite:///{settings.db_path}",
@@ -215,6 +215,81 @@ def acknowledge_events() -> int:
             session.add(e)
         session.commit()
         return len(events)
+
+
+# --------------------------------------------------------------------------- #
+# Cases
+# --------------------------------------------------------------------------- #
+def create_case(title: str, severity: str = "info", event_ids: list[int] | None = None) -> dict:
+    with get_session() as session:
+        case = Case(title=title or "Untitled case", severity=severity)
+        session.add(case)
+        session.commit()
+        session.refresh(case)
+        if event_ids:
+            for e in session.exec(select(Event).where(Event.id.in_(event_ids))).all():
+                e.case_id = case.id
+                session.add(e)
+            session.commit()
+        return _case_to_dict(case, session)
+
+
+def list_cases() -> list[dict]:
+    with get_session() as session:
+        cases = session.exec(select(Case).order_by(Case.updated_at.desc())).all()
+        return [_case_to_dict(c, session) for c in cases]
+
+
+def get_case(case_id: int) -> dict | None:
+    with get_session() as session:
+        case = session.get(Case, case_id)
+        if case is None:
+            return None
+        d = _case_to_dict(case, session)
+        events = session.exec(
+            select(Event).where(Event.case_id == case_id).order_by(Event.ts.desc())
+        ).all()
+        d["events"] = [_event_to_dict(e) for e in events]
+        return d
+
+
+def update_case(case_id: int, **fields) -> dict | None:
+    with get_session() as session:
+        case = session.get(Case, case_id)
+        if case is None:
+            return None
+        for key in ("title", "status", "severity", "owner", "notes"):
+            if fields.get(key) is not None:
+                setattr(case, key, fields[key])
+        case.updated_at = utcnow()
+        session.add(case)
+        session.commit()
+        session.refresh(case)
+        return _case_to_dict(case, session)
+
+
+def link_events_to_case(case_id: int, event_ids: list[int]) -> dict | None:
+    with get_session() as session:
+        case = session.get(Case, case_id)
+        if case is None:
+            return None
+        for e in session.exec(select(Event).where(Event.id.in_(event_ids))).all():
+            e.case_id = case_id
+            session.add(e)
+        case.updated_at = utcnow()
+        session.add(case)
+        session.commit()
+        return get_case(case_id)
+
+
+def _case_to_dict(c: Case, session: Session) -> dict:
+    count = len(session.exec(select(Event).where(Event.case_id == c.id)).all())
+    return {
+        "id": c.id, "title": c.title, "status": c.status, "severity": c.severity,
+        "owner": c.owner, "notes": c.notes, "event_count": count,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }
 
 
 def _event_to_dict(e: Event) -> dict:
