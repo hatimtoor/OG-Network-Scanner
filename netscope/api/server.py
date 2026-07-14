@@ -234,8 +234,26 @@ async def get_quarantined() -> list[dict]:
     return quarantine.list_quarantined()
 
 
+def _guard_dangerous(request: Request):
+    """Active-response can cut a device off the network. Never allow it from a
+    remote client unless auth is on — confine it to localhost otherwise."""
+    if settings.auth_enabled:
+        return None  # already token-gated by the middleware
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        return JSONResponse(
+            {"error": "active response is restricted to localhost unless authentication "
+                      "is enabled (set NETSCOPE_AUTH=true)"},
+            status_code=403,
+        )
+    return None
+
+
 @app.post("/api/response/quarantine")
-async def do_quarantine(body: dict):
+async def do_quarantine(body: dict, request: Request):
+    blocked = _guard_dangerous(request)
+    if blocked is not None:
+        return blocked
     key = (body or {}).get("key", "")
     device = store.get_device(key)
     if device is None:
@@ -259,7 +277,10 @@ async def do_quarantine(body: dict):
 
 
 @app.post("/api/response/release")
-async def do_release(body: dict):
+async def do_release(body: dict, request: Request):
+    blocked = _guard_dangerous(request)
+    if blocked is not None:
+        return blocked
     result = await asyncio.to_thread(quarantine.release, (body or {}).get("key", ""))
     if result.get("ok"):
         store.add_event("quarantine", f"Device released from quarantine: {body.get('key')}",
@@ -617,6 +638,11 @@ async def sandbox_file(body: dict):
 # --------------------------------------------------------------------------- #
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
+    # The live-data channel must honour auth too — otherwise anyone who can reach
+    # the port receives every device join, alert, and threat in real time.
+    if settings.auth_enabled and not auth.verify_token(ws.cookies.get("netscope_token", "")):
+        await ws.close(code=1008)  # policy violation
+        return
     await hub.connect(ws)
     try:
         while True:
