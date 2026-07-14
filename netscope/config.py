@@ -145,6 +145,9 @@ class Settings:
     ))
     feeds_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_FEEDS", True))
     feed_refresh_hours: int = field(default_factory=lambda: _get_int("NETSCOPE_FEED_REFRESH_HOURS", 12))
+    misp_url: str = field(default_factory=lambda: _get("NETSCOPE_MISP_URL", ""))
+    misp_key: str = field(default_factory=lambda: _get("NETSCOPE_MISP_KEY", ""))
+    stix_url: str = field(default_factory=lambda: _get("NETSCOPE_STIX_URL", ""))
     extract_dir: str = field(default_factory=lambda: _get("NETSCOPE_EXTRACT_DIR", ""))
 
     # Scheduled reports (R21)
