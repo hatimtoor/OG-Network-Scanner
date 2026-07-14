@@ -140,6 +140,19 @@ main { padding: 20px 28px 60px; }
 .conn-table tr:hover td { background: var(--panel); }
 .conn-table .proc { color: var(--accent); font-weight: 600; }
 
+/* Hunting */
+.hunt-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+@media (max-width: 900px) { .hunt-grid { grid-template-columns: 1fr; } }
+.hunt-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.hunt-bar input[type=text] { flex: 1; min-width: 200px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 11px; }
+.hunt-side { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; align-self: start; }
+.talker { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; cursor: pointer; }
+.talker:last-child { border-bottom: 0; }
+.talker:hover { color: var(--accent); }
+.talker .cnt { color: var(--muted); font-size: 11px; }
+.talker-bar { height: 4px; background: var(--panel-2); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.talker-bar > i { display: block; height: 100%; background: var(--accent); }
+
 /* Security */
 .sec-status { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
 .sec-chip { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); font-size: 12.5px; }
