@@ -178,6 +178,25 @@ class Monitor:
         if alerts:
             await self._emit({"type": "ids_alerts", "count": len(alerts)})
 
+        # Zeek conn.log -> whole-network flows; dns.log -> DNS analytics.
+        try:
+            zeek_flows = await asyncio.to_thread(sensor.poll_new_conn_flows)
+            if zeek_flows:
+                await asyncio.to_thread(analytics.record_zeek_flows, zeek_flows)
+            for domain in await asyncio.to_thread(sensor.poll_new_dns_names):
+                if domain not in self._fired_domains:
+                    self._fired_domains.add(domain)
+                    v = dns_analytics.analyze_domain(domain)
+                    if v.suspicious:
+                        mitre = "T1568" if v.category == "dga" else "T1572"
+                        store.add_event(
+                            "dns_anomaly",
+                            f"Suspicious DNS ({v.category}): {domain} — {'; '.join(v.reasons)}",
+                            severity="warning", mitre=mitre,
+                        )
+        except Exception:
+            pass
+
         # 2) Optional reputation check of new external IPs this host talks to.
         if not (settings.threat_auto_check and threatintel.available()):
             return
