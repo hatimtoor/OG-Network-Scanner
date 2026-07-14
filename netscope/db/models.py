@@ -27,6 +27,10 @@ class Device(SQLModel, table=True):
     os_guess: str = Field(default="")
     confidence: int = Field(default=0)
 
+    # Stable device fingerprint (hostname + open-port profile + mDNS + DHCP OS),
+    # used to recognise a device that rotates its MAC to evade tracking.
+    fingerprint: str = Field(default="", index=True)
+
     # User-editable
     label: str = Field(default="")
     trusted: bool = Field(default=False)
