@@ -117,6 +117,17 @@ main { padding: 20px 28px 60px; }
 .mitre-badge { display: inline-block; margin-left: 8px; font-size: 10.5px; padding: 2px 7px; border-radius: 12px; background: rgba(79,157,255,0.12); color: var(--accent); border: 1px solid #2a4a76; text-decoration: none; white-space: nowrap; }
 .mitre-badge:hover { background: rgba(79,157,255,0.25); }
 .empty { color: var(--muted); text-align: center; padding: 50px; }
+.ev-check { margin-right: 4px; }
+.case-tag { font-size: 10.5px; padding: 1px 7px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
+
+/* Cases */
+.case-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+.case-row:hover { border-color: var(--accent); }
+.case-title { font-weight: 600; flex: 1; }
+.case-status { font-size: 10.5px; text-transform: uppercase; padding: 3px 9px; border-radius: 12px; letter-spacing: 0.5px; }
+.case-status.open { background: rgba(79,157,255,0.14); color: var(--accent); }
+.case-status.investigating { background: rgba(255,176,32,0.14); color: var(--warn); }
+.case-status.closed { background: rgba(138,151,171,0.14); color: var(--muted); }
 
 /* Toolbar + export */
 .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
