@@ -74,6 +74,29 @@ def _notify_webhook(title: str, message: str) -> None:
         pass
 
 
+def send_html_email(subject: str, html: str, to: str = "") -> bool:
+    """Send an HTML email (used for scheduled reports). Returns success."""
+    recipient = to or settings.report_email or settings.smtp_to
+    if not (settings.smtp_host and recipient):
+        return False
+    try:
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = settings.smtp_user or "netscope@localhost"
+        msg["To"] = recipient
+        msg.attach(MIMEText(html, "html"))
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            server.starttls()
+            if settings.smtp_user:
+                server.login(settings.smtp_user, settings.smtp_pass)
+            server.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
 def notify(title: str, message: str) -> None:
     """Send a notification through all configured channels."""
     _notify_desktop(title, message)
