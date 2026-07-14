@@ -32,6 +32,7 @@
     <button data-view="hunting">Hunting</button>
     <button data-view="security">Security</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
+    <button data-view="cases">Cases</button>
   </nav>
 
   <main>
@@ -118,10 +119,17 @@
 
     <section class="view" id="view-alerts">
       <div class="toolbar">
+        <button class="export-btn" id="makeCaseBtn">＋ Create case from selected</button>
         <a class="export-btn" href="/api/export/events.csv" download>⭳ Export alerts (CSV)</a>
       </div>
       <div class="events" id="eventList"></div>
       <div class="empty" id="alertsEmpty">No alerts yet.</div>
+    </section>
+
+    <section class="view" id="view-cases">
+      <div class="toolbar"><button class="export-btn" id="newCaseBtn">＋ New case</button></div>
+      <div id="caseList"></div>
+      <div class="empty" id="casesEmpty">No cases yet. Select alerts and create a case, or click “New case”.</div>
     </section>
   </main>
 
