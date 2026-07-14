@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY netscope ./netscope
 
-ENV NETSCOPE_HOST=0.0.0.0 \
+# Bind locally by default. Exposing on the network (0.0.0.0) is gated behind
+# authentication — see docker-compose.yml, which sets NETSCOPE_AUTH + a password.
+ENV NETSCOPE_HOST=127.0.0.1 \
     NETSCOPE_OPEN_BROWSER=false \
     NETSCOPE_DB=/data/netscope.db \
     NETSCOPE_ANALYTICS_DB=/data/netscope-flows.duckdb

@@ -15,8 +15,15 @@ services:
       - NET_RAW                  # scapy ARP / passive capture
       - NET_ADMIN
     environment:
-      - NETSCOPE_HOST=0.0.0.0
       - NETSCOPE_OPEN_BROWSER=false
+      # SECURITY: with host networking, binding 0.0.0.0 exposes NetScope on your
+      # LAN. That is only allowed WITH authentication. To reach the dashboard from
+      # another machine, uncomment all three lines below and set a real password:
+      # - NETSCOPE_HOST=0.0.0.0
+      # - NETSCOPE_AUTH=true
+      # - NETSCOPE_PASSWORD=please-change-me
+      #
+      # Left as-is, the container binds 127.0.0.1 (reachable only from this host).
     volumes:
       - netscope-data:/data
     restart: unless-stopped
