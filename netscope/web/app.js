@@ -348,6 +348,53 @@ function mitreBadge(id) {
 }
 
 // --------------------------------------------------------------------------- //
+// Dashboard + unified search
+// --------------------------------------------------------------------------- //
+async function refreshDashboard() {
+  const d = await getJSON("/api/dashboard");
+  const sev = d.severity || {};
+  const card = (l, v, cls) => `<div class="tp-card"><span class="label">${l}</span><span class="value ${cls}">${v || 0}</span></div>`;
+  document.getElementById("dashSeverity").innerHTML =
+    card("Critical", sev.critical, "crit-val") + card("Warning", sev.warning, "warn-val") +
+    card("Info", sev.info, "") + card("Flows", (d.flows || {}).total, "");
+
+  // throughput sparkline (reuse history)
+  trafficHistory = d.throughput || [];
+  const svg = document.getElementById("dashChart");
+  const W = 800, H = 160, pad = 6, data = trafficHistory;
+  if (data.length) {
+    const mx = Math.max(1, ...data.map((x) => Math.max(x.recv_rate, x.sent_rate)));
+    const px = (i) => pad + i * (W - 2 * pad) / Math.max(1, data.length - 1);
+    const py = (v) => H - pad - (v / mx) * (H - 2 * pad);
+    const line = (k) => data.map((x, i) => `${i ? "L" : "M"}${px(i).toFixed(0)},${py(x[k]).toFixed(0)}`).join(" ");
+    svg.innerHTML = `<path d="${line("recv_rate")}" fill="none" stroke="#4f9dff" stroke-width="2"/><path d="${line("sent_rate")}" fill="none" stroke="#37e0a0" stroke-width="2"/>`;
+  } else svg.innerHTML = "";
+
+  const bars = (items, color) => items.length ? items.map((t) => {
+    const max = Math.max(...items.map((x) => x.count), 1);
+    return `<div class="dbar"><span class="dbar-l">${enc(t.name)}</span><span class="dbar-track"><i style="width:${Math.round(t.count / max * 100)}%;background:${color}"></i></span><span class="dbar-c">${t.count}</span></div>`;
+  }).join("") : '<span class="sub">none</span>';
+  document.getElementById("dashTypes").innerHTML = bars(d.types || [], "var(--accent)");
+  document.getElementById("dashMitre").innerHTML = (d.mitre || []).length
+    ? (d.mitre).map((m) => `${mitreBadge(m.name)} <span class="sub">×${m.count}</span>`).join("<br>")
+    : '<span class="sub">no tagged detections yet</span>';
+  document.getElementById("dashPorts").innerHTML = bars((d.top_ports || []).map((p) => ({ name: "port " + p.port, count: p.count })), "var(--accent-2)");
+}
+
+async function doGlobalSearch() {
+  const q = document.getElementById("globalSearch").value.trim();
+  const box = document.getElementById("searchResults");
+  if (!q) { box.innerHTML = ""; return; }
+  const r = await getJSON(`/api/search?q=${encodeURIComponent(q)}`);
+  const sec = (title, items, fmt) => items.length ? `<div class="sr-sec"><b>${title} (${items.length})</b>${items.slice(0, 8).map(fmt).join("")}</div>` : "";
+  box.innerHTML = `<div class="sr">` +
+    sec("Devices", r.devices, (d) => `<div class="sr-row" onclick="openDetail('${enc(d.key)}')">${enc(d.display_name)} · ${enc(d.ip)}</div>`) +
+    sec("Alerts", r.events, (e) => `<div class="sr-row">[${e.severity}] ${enc(e.message).slice(0, 90)}</div>`) +
+    sec("Flows", r.flows, (f) => `<div class="sr-row">${enc(f.process || "")} → ${enc(f.remote_ip)}:${f.remote_port}</div>`) +
+    (r.devices.length + r.events.length + r.flows.length ? "" : '<span class="sub">No matches.</span>') + `</div>`;
+}
+
+// --------------------------------------------------------------------------- //
 // Traffic
 // --------------------------------------------------------------------------- //
 let trafficHistory = [];
@@ -817,6 +864,7 @@ function setupTabs() {
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       btn.classList.add("active");
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
+      if (btn.dataset.view === "dashboard") refreshDashboard().catch(() => {});
       if (btn.dataset.view === "topology") renderTopology();
       if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
       if (btn.dataset.view === "hunting") refreshHunting().catch(() => {});
@@ -893,6 +941,7 @@ document.getElementById("pktBtn").onclick = searchPackets;
 document.getElementById("pktSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPackets(); });
 document.getElementById("vulnBtn").onclick = scanHostVulns;
 document.getElementById("fimBtn").onclick = runFimScan;
+document.getElementById("globalSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") doGlobalSearch(); });
 document.getElementById("aiBtn").onclick = () => askAI();
 document.getElementById("aiInput").addEventListener("keydown", (e) => { if (e.key === "Enter") askAI(); });
 document.querySelectorAll(".ai-ex").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); askAI(a.textContent); }));
