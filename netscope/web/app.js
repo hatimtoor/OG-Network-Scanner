@@ -332,14 +332,36 @@ function mitreBadge(id) {
 let trafficHistory = [];
 
 async function refreshTraffic() {
-  const [t, hist] = await Promise.all([
+  const [t, hist, bw] = await Promise.all([
     getJSON("/api/traffic"),
     getJSON("/api/traffic/history?limit=180"),
+    getJSON("/api/flows/bandwidth?limit=40").catch(() => []),
   ]);
   trafficHistory = hist;
   renderTrafficCards(t.throughput);
   renderTrafficChart();
+  renderBandwidth(bw);
   renderConnTable(t.connections);
+}
+
+function renderBandwidth(rows) {
+  const tbody = document.querySelector("#bwTable tbody");
+  if (!rows || !rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="sub" style="padding:14px">No per-device data yet (accumulates as flows are seen; whole-network needs a Zeek sensor).</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r) =>
+    `<tr><td class="proc">${enc(r.name || r.ip)}</td><td>${enc(r.ip)}</td>
+      <td>${fmtBytes(r.bytes_sent)}</td><td>${fmtBytes(r.bytes_recv)}</td><td>${r.flows}</td></tr>`
+  ).join("");
+}
+
+function fmtBytes(b) {
+  b = b || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
+  return `${(b / 1073741824).toFixed(2)} GB`;
 }
 
 function renderTrafficCards(tp) {
