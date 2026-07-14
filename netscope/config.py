@@ -121,6 +121,17 @@ class Settings:
     snmp_community: str = field(default_factory=lambda: _get("NETSCOPE_SNMP_COMMUNITY", "public"))
     passive_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_PASSIVE", True))
 
+    # Full packet capture (R2) — off by default (heavy, needs Npcap + privileges)
+    pcap_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_PCAP", False))
+    pcap_dir: str = field(
+        default_factory=lambda: _get(
+            "NETSCOPE_PCAP_DIR", str(Path(__file__).resolve().parent.parent / "pcaps")
+        )
+    )
+    pcap_file_mb: int = field(default_factory=lambda: _get_int("NETSCOPE_PCAP_FILE_MB", 50))
+    pcap_max_files: int = field(default_factory=lambda: _get_int("NETSCOPE_PCAP_MAX_FILES", 20))
+    pcap_interface: str = field(default_factory=lambda: _get("NETSCOPE_PCAP_INTERFACE", ""))
+
 
 _load_dotenv()
 settings = Settings()
