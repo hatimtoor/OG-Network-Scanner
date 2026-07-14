@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass
 
 from ..config import settings
+from ..core.netutil import is_private_ip
 
 
 @dataclass
@@ -122,7 +123,7 @@ def configured() -> bool:
 # Zeek TSV log ingestion (conn.log / dns.log) -> flow store + DNS analytics
 # --------------------------------------------------------------------------- #
 def _is_local(ip: str) -> bool:
-    return ip.startswith(("10.", "192.168.", "172.", "169.254.", "127."))
+    return is_private_ip(ip)
 
 
 def _read_new_zeek_rows(path: str) -> list[dict]:
