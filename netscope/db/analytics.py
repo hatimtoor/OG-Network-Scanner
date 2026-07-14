@@ -50,10 +50,25 @@ def init() -> None:
                 remote_is_local BOOLEAN,
                 first_seen  TIMESTAMP,
                 last_seen   TIMESTAMP,
-                samples     BIGINT
+                samples     BIGINT,
+                bytes_sent  BIGINT DEFAULT 0,
+                bytes_recv  BIGINT DEFAULT 0,
+                source      VARCHAR DEFAULT 'host'
             )
             """
         )
+        # Migrate older flow databases missing the newer columns.
+        cols = {
+            r[0] for r in _conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='flows'"
+            ).fetchall()
+        }
+        for name, ddl in {
+            "bytes_sent": "BIGINT DEFAULT 0", "bytes_recv": "BIGINT DEFAULT 0",
+            "source": "VARCHAR DEFAULT 'host'",
+        }.items():
+            if name not in cols:
+                _conn.execute(f"ALTER TABLE flows ADD COLUMN {name} {ddl}")
 
 
 def available() -> bool:
@@ -94,11 +109,68 @@ def record_connections(connections: list) -> int:
                 )
             else:
                 _conn.execute(
-                    "INSERT INTO flows VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    [key, lip, rip, rport, proto, proc, is_local, ts, ts, 1],
+                    """INSERT INTO flows
+                       (flow_key, local_ip, remote_ip, remote_port, protocol, process,
+                        remote_is_local, first_seen, last_seen, samples, bytes_sent,
+                        bytes_recv, source)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    [key, lip, rip, rport, proto, proc, is_local, ts, ts, 1, 0, 0, "host"],
                 )
                 new_count += 1
     return new_count
+
+
+def record_zeek_flows(rows: list[dict]) -> int:
+    """Ingest Zeek conn.log rows as network-wide flows (with byte counts)."""
+    if _conn is None or not rows:
+        return 0
+    now = _now()
+    new_count = 0
+    with _lock:
+        for r in rows:
+            lip = r.get("local_ip", "")
+            rip = r.get("remote_ip", "")
+            if not rip:
+                continue
+            rport = int(r.get("remote_port", 0) or 0)
+            proto = r.get("protocol", "") or "tcp"
+            key = f"zeek|{lip}|{rip}|{rport}"
+            bs = int(r.get("bytes_sent", 0) or 0)
+            br = int(r.get("bytes_recv", 0) or 0)
+            existing = _conn.execute("SELECT samples FROM flows WHERE flow_key = ?", [key]).fetchone()
+            if existing:
+                _conn.execute(
+                    """UPDATE flows SET last_seen = ?, samples = samples + 1,
+                       bytes_sent = bytes_sent + ?, bytes_recv = bytes_recv + ?
+                       WHERE flow_key = ?""",
+                    [now, bs, br, key],
+                )
+            else:
+                _conn.execute(
+                    """INSERT INTO flows
+                       (flow_key, local_ip, remote_ip, remote_port, protocol, process,
+                        remote_is_local, first_seen, last_seen, samples, bytes_sent,
+                        bytes_recv, source)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    [key, lip, rip, rport, proto, "", _is_local(rip), now, now, 1, bs, br, "zeek"],
+                )
+                new_count += 1
+    return new_count
+
+
+def exfil_candidates(min_bytes: int = 50_000_000) -> list[dict]:
+    """External flows with large upload volume (possible data exfiltration)."""
+    if _conn is None:
+        return []
+    with _lock:
+        rows = _conn.execute(
+            """SELECT local_ip, remote_ip, remote_port, process, bytes_sent
+               FROM flows WHERE remote_is_local = FALSE AND bytes_sent >= ?
+               ORDER BY bytes_sent DESC LIMIT 20""",
+            [min_bytes],
+        ).fetchall()
+    return [{"local_ip": r[0], "remote_ip": r[1], "remote_port": r[2],
+             "process": r[3], "bytes_sent": r[4]} for r in rows]
 
 
 def query_flows(
