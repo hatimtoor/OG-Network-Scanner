@@ -158,6 +158,23 @@ def record_zeek_flows(rows: list[dict]) -> int:
     return new_count
 
 
+def device_bandwidth(limit: int = 50) -> list[dict]:
+    """Per-device byte totals grouped by local IP (whole-network with a Zeek sensor)."""
+    if _conn is None:
+        return []
+    with _lock:
+        rows = _conn.execute(
+            """SELECT local_ip, SUM(bytes_sent) AS sent, SUM(bytes_recv) AS recv,
+                      COUNT(*) AS flows
+               FROM flows WHERE local_ip <> ''
+               GROUP BY local_ip
+               ORDER BY (SUM(bytes_sent) + SUM(bytes_recv)) DESC LIMIT ?""",
+            [limit],
+        ).fetchall()
+    return [{"ip": r[0], "bytes_sent": int(r[1] or 0), "bytes_recv": int(r[2] or 0),
+             "flows": r[3]} for r in rows]
+
+
 def exfil_candidates(min_bytes: int = 50_000_000) -> list[dict]:
     """External flows with large upload volume (possible data exfiltration)."""
     if _conn is None:
