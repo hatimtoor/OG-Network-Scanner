@@ -8,11 +8,14 @@ from pathlib import Path
 import csv
 import io
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from . import auth
+
 from .. import __app_name__, __version__
+from .. import compliance
 from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
@@ -84,6 +87,39 @@ def _honeypot_hit(src_ip: str, port: int) -> None:
 
 
 app = FastAPI(title=__app_name__, version=__version__, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if settings.auth_enabled and not auth.is_public(request.url.path):
+        token = request.cookies.get("netscope_token", "")
+        if not auth.verify_token(token):
+            return JSONResponse({"error": "authentication required"}, status_code=401)
+    return await call_next(request)
+
+
+@app.post("/api/login")
+async def login(body: dict):
+    if not settings.auth_enabled:
+        return {"ok": True, "auth": "disabled"}
+    if auth.check_password((body or {}).get("password", "")):
+        resp = JSONResponse({"ok": True})
+        resp.set_cookie("netscope_token", auth.create_token("admin"),
+                        httponly=True, samesite="lax", max_age=7 * 86400)
+        return resp
+    return JSONResponse({"ok": False, "error": "invalid password"}, status_code=401)
+
+
+@app.post("/api/logout")
+async def logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("netscope_token")
+    return resp
+
+
+@app.get("/api/auth")
+async def auth_status() -> dict:
+    return {"enabled": settings.auth_enabled}
 
 
 # --------------------------------------------------------------------------- #
@@ -421,6 +457,17 @@ async def export_events() -> Response:
     rows = store.list_events(limit=1000)
     cols = ["ts", "severity", "type", "ip", "mac", "message"]
     return _csv_response(rows, cols, "netscope-events.csv")
+
+
+@app.get("/api/compliance")
+async def get_compliance() -> dict:
+    return await asyncio.to_thread(compliance.run)
+
+
+@app.get("/api/compliance/report.html")
+async def compliance_report() -> Response:
+    html_doc = await asyncio.to_thread(compliance.html_report)
+    return Response(content=html_doc, media_type="text/html")
 
 
 @app.get("/api/report")
