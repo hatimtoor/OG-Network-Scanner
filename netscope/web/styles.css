@@ -192,6 +192,18 @@ main { padding: 20px 28px 60px; }
 .ai-examples { margin-top: 16px; font-size: 12.5px; color: var(--muted); }
 .ai-examples a { color: var(--accent); text-decoration: none; }
 
+/* Dashboard widgets */
+.crit-val { color: var(--crit); } .warn-val { color: var(--warn); }
+.dbar { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+.dbar-l { width: 130px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbar-track { flex: 1; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.dbar-track > i { display: block; height: 100%; }
+.dbar-c { width: 40px; text-align: right; color: var(--muted); }
+.sr { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
+.sr-sec { margin-bottom: 10px; }
+.sr-row { font-size: 12.5px; padding: 4px 0; cursor: pointer; color: var(--text); }
+.sr-row:hover { color: var(--accent); }
+
 /* Login overlay */
 .login-overlay { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 100; }
 .login-overlay.open { display: flex; }
