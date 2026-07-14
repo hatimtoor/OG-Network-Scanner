@@ -27,6 +27,7 @@ class PassiveListener:
     def __init__(self) -> None:
         self._sniffer = None
         self._store: dict[str, dict] = {}
+        self._domains: dict[str, dict] = {}   # domain -> {count, src, first_seen}
         self._lock = threading.Lock()
         self.active = False
 
@@ -39,7 +40,7 @@ class PassiveListener:
             return True
         try:
             self._sniffer = AsyncSniffer(
-                filter="udp port 67 or udp port 68 or ether proto 0x88cc",
+                filter="udp port 67 or udp port 68 or udp port 53 or ether proto 0x88cc",
                 prn=self._handle,
                 store=False,
             )
@@ -82,8 +83,37 @@ class PassiveListener:
         try:
             self._handle_dhcp(pkt)
             self._handle_lldp(pkt)
+            self._handle_dns(pkt)
         except Exception:
             pass
+
+    def _handle_dns(self, pkt) -> None:
+        try:
+            from scapy.layers.dns import DNSQR  # type: ignore
+            from scapy.layers.inet import IP  # type: ignore
+        except Exception:
+            return
+        if not pkt.haslayer(DNSQR):
+            return
+        try:
+            qname = pkt[DNSQR].qname
+            domain = (qname.decode("utf-8", "ignore") if isinstance(qname, bytes) else str(qname)).strip(".")
+        except Exception:
+            return
+        if not domain or domain.endswith((".local", ".arpa", ".lan")):
+            return
+        src = pkt[IP].src if pkt.haslayer(IP) else ""
+        with self._lock:
+            entry = self._domains.setdefault(domain, {"count": 0, "src": src})
+            entry["count"] += 1
+
+    def recent_domains(self) -> dict[str, dict]:
+        with self._lock:
+            return dict(self._domains)
+
+    def clear_domains(self) -> None:
+        with self._lock:
+            self._domains.clear()
 
     def _handle_dhcp(self, pkt) -> None:
         try:
