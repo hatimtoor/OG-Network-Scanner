@@ -17,6 +17,9 @@ TECHNIQUES = {
     "T1595": "Active Scanning",
     "T1021": "Remote Services",
     "T1190": "Exploit Public-Facing Application",
+    "T1565": "Data Manipulation",
+    "T1070": "Indicator Removal (file deleted)",
+    "T1046-scan": "Network Service Discovery",
 }
 
 
