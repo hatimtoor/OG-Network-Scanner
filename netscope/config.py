@@ -84,6 +84,14 @@ class Settings:
             "NETSCOPE_DB", str(Path(__file__).resolve().parent.parent / "netscope.db")
         )
     )
+    analytics_path: str = field(
+        default_factory=lambda: _get(
+            "NETSCOPE_ANALYTICS_DB",
+            str(Path(__file__).resolve().parent.parent / "netscope-flows.duckdb"),
+        )
+    )
+    flow_record: bool = field(default_factory=lambda: _get_bool("NETSCOPE_FLOW_RECORD", True))
+    flow_retention_days: int = field(default_factory=lambda: _get_int("NETSCOPE_FLOW_RETENTION_DAYS", 7))
 
     # Notifications
     notify_desktop: bool = field(default_factory=lambda: _get_bool("NETSCOPE_NOTIFY_DESKTOP", True))
