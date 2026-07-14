@@ -33,3 +33,25 @@ def test_printer_and_tv():
 
 def test_randomized_mac_vendor_hidden():
     assert oui.lookup_vendor("7A:11:22:33:44:55") == "Private (randomized MAC)"
+
+
+def test_bare_randomized_phone_not_computer():
+    # A phone that hides everything (randomized MAC, no hostname, no open ports,
+    # mobile TTL) must NOT be called a computer — this was the live-test bug.
+    r = identify.identify(mac="7A:AB:CD:EF:00:11", ip="192.168.1.21", ttl=64)
+    assert r.device_type == "phone"
+
+
+def test_windows_pc_stays_computer_despite_no_hostname():
+    r = identify.identify(mac="00:1C:B3:00:00:02", ip="192.168.1.30",
+                          open_ports=[445, 139, 3389], ttl=128)
+    assert r.device_type == "computer"
+
+
+def test_mac_laptop_with_smb_is_computer_not_phone():
+    # macOS randomizes its MAC too, but a real computer advertises SMB/SSH — the
+    # phone-lean must not override that evidence.
+    r = identify.identify(mac="7A:11:22:33:44:99", ip="192.168.1.31",
+                          open_ports=[22, 445], ttl=64,
+                          mdns_services=["_smb._tcp.local."])
+    assert r.device_type == "computer"
