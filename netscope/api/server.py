@@ -16,6 +16,7 @@ from . import auth
 
 from .. import __app_name__, __version__
 from .. import compliance
+from .. import log
 from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
@@ -65,6 +66,7 @@ monitor = Monitor(broadcast=hub.broadcast)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log.setup_logging()
     store.init_db()
     analytics.init()
     monitor.start()
@@ -121,6 +123,18 @@ async def logout():
 @app.get("/api/auth")
 async def auth_status() -> dict:
     return {"enabled": settings.auth_enabled}
+
+
+@app.get("/api/health")
+async def health() -> dict:
+    """Liveness + a surface for recent internal errors, so failures are visible."""
+    return {
+        "ok": True,
+        "version": __version__,
+        "scanning": monitor.scanning,
+        "analytics_available": analytics.available(),
+        "recent_errors": log.recent_errors(20),
+    }
 
 
 # --------------------------------------------------------------------------- #
