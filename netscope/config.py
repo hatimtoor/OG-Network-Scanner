@@ -151,6 +151,15 @@ class Settings:
     report_schedule_hours: int = field(default_factory=lambda: _get_int("NETSCOPE_REPORT_HOURS", 0))
     report_email: str = field(default_factory=lambda: _get("NETSCOPE_REPORT_EMAIL", ""))
 
+    # Phase C
+    anomaly_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_ANOMALY", True))
+    honeypot_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_HONEYPOT", False))
+    honeypot_ports: str = field(default_factory=lambda: _get("NETSCOPE_HONEYPOT_PORTS", "23,2323,3389,8081"))
+    auth_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_AUTH", False))
+    auth_password: str = field(default_factory=lambda: _get("NETSCOPE_PASSWORD", ""))
+    anthropic_key: str = field(default_factory=lambda: _get("NETSCOPE_ANTHROPIC_KEY", ""))
+    ai_model: str = field(default_factory=lambda: _get("NETSCOPE_AI_MODEL", "claude-sonnet-5"))
+
 
 _load_dotenv()
 settings = Settings()
