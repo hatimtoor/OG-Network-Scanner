@@ -147,6 +147,10 @@ class Settings:
     feed_refresh_hours: int = field(default_factory=lambda: _get_int("NETSCOPE_FEED_REFRESH_HOURS", 12))
     extract_dir: str = field(default_factory=lambda: _get("NETSCOPE_EXTRACT_DIR", ""))
 
+    # Scheduled reports (R21)
+    report_schedule_hours: int = field(default_factory=lambda: _get_int("NETSCOPE_REPORT_HOURS", 0))
+    report_email: str = field(default_factory=lambda: _get("NETSCOPE_REPORT_EMAIL", ""))
+
 
 _load_dotenv()
 settings = Settings()
