@@ -277,8 +277,17 @@ function renderEvents() {
   const unack = events.filter((e) => !e.acknowledged && e.severity !== "info").length;
   document.getElementById("alertCount").textContent = unack ? `(${unack})` : "";
   list.innerHTML = events
-    .map((e) => `<div class="event ${e.severity}"><span class="etime">${fmtTime(e.ts)}</span><span class="emsg">${enc(e.message)}</span></div>`)
+    .map((e) => `<div class="event ${e.severity}"><span class="etime">${fmtTime(e.ts)}</span><span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}</span></div>`)
     .join("");
+}
+
+function mitreBadge(id) {
+  if (!id) return "";
+  const base = id.split(".")[0];
+  const url = id.includes(".")
+    ? `https://attack.mitre.org/techniques/${base}/${id.split(".")[1]}/`
+    : `https://attack.mitre.org/techniques/${base}/`;
+  return ` <a class="mitre-badge" href="${url}" target="_blank" title="MITRE ATT&CK">${enc(id)}</a>`;
 }
 
 // --------------------------------------------------------------------------- //
