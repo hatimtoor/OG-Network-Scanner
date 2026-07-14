@@ -37,3 +37,6 @@ fim_baseline.json
 threat_feeds.json
 quarantine_state.json
 .auth_secret
+build/
+dist/
+*.egg-info/
