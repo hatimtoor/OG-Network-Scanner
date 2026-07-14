@@ -40,3 +40,4 @@ quarantine_state.json
 build/
 dist/
 *.egg-info/
+baselines.json
