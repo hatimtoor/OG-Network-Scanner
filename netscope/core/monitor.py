@@ -9,7 +9,7 @@ from ..config import RISKY_PORTS, settings
 from ..db import analytics, store
 from ..notify import notify, send_html_email
 from ..agent import fim
-from ..detect import behavioral, dns_analytics
+from ..detect import anomaly, behavioral, dns_analytics
 from ..enrich import passive
 from ..security import feeds, sensor, threatintel, yara_scan
 from . import report, scanner, traffic
@@ -170,6 +170,18 @@ class Monitor:
             if d.severity in ("warning", "critical"):
                 notify(f"Behavioral alert: {d.dtype}", d.title)
             new = True
+
+        # Statistical anomalies (R5) — spikes far outside the learned baseline.
+        if settings.anomaly_enabled:
+            for a in anomaly.run():
+                if a.key in self._fired_detections:
+                    continue
+                self._fired_detections.add(a.key)
+                store.add_event("anomaly", f"{a.title} — {a.description}",
+                                severity=a.severity, mitre=a.mitre_id)
+                notify("Anomaly detected", a.title)
+                new = True
+
         if new:
             await self._emit({"type": "detections", "count": len(detections)})
 
