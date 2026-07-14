@@ -28,7 +28,7 @@ from ..enrich import cve, deepscan
 from ..honeypot import honeypot
 from ..notify import notify
 from ..response import quarantine
-from ..security import feeds, sensor, threatintel, yara_scan
+from ..security import feeds, sandbox, sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -529,6 +529,7 @@ async def security_status() -> dict:
         "yara": yara_scan.yara_available(),
         "auto_check": settings.threat_auto_check,
         "feeds": feeds.status(),
+        "sandbox": sandbox.available(),
     }
 
 
@@ -567,6 +568,15 @@ async def scan_file(body: dict):
     if not path:
         return JSONResponse({"error": "path required"}, status_code=400)
     result = await asyncio.to_thread(yara_scan.scan_file, path, True)
+    return result.to_dict()
+
+
+@app.post("/api/security/sandbox")
+async def sandbox_file(body: dict):
+    path = (body or {}).get("path", "").strip()
+    if not path:
+        return JSONResponse({"error": "path required"}, status_code=400)
+    result = await asyncio.to_thread(sandbox.analyze_file, path)
     return result.to_dict()
 
 
