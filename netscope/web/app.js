@@ -678,6 +678,22 @@ async function doIpCheck() {
   } catch (e) { box.innerHTML = "<span class='sub'>check failed</span>"; }
 }
 
+async function doFileSandbox() {
+  const path = document.getElementById("fileInput").value.trim();
+  if (!path) return;
+  const box = document.getElementById("fileResult");
+  box.innerHTML = "<span class='sub'>Detonating (Cuckoo / VirusTotal behaviour)… can take a while.</span>";
+  try {
+    const r = await api("/api/security/sandbox", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (r.detail && r.source === "none") { box.innerHTML = `<span class='sub'>${enc(r.detail)}</span>`; return; }
+    const sigs = (r.signatures || []).slice(0, 8).map((s) => enc(s)).join(", ");
+    box.innerHTML = verdictBlock({ verdict: r.verdict, sha256: r.sha256, vt_detail: `${r.source} · score ${r.score}${sigs ? " · " + sigs : ""}` });
+  } catch (e) { box.innerHTML = "<span class='sub'>Sandbox failed.</span>"; }
+}
+
 async function doFileScan() {
   const path = document.getElementById("fileInput").value.trim();
   if (!path) return;
@@ -870,6 +886,7 @@ document.getElementById("modalBackdrop").onclick = (e) => {
 };
 document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
+document.getElementById("fileSandboxBtn").onclick = doFileSandbox;
 document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
 document.getElementById("pcapToggle").onclick = togglePcap;
 document.getElementById("pktBtn").onclick = searchPackets;
