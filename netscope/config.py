@@ -153,6 +153,8 @@ class Settings:
 
     # Phase C
     anomaly_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_ANOMALY", True))
+    baseline_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_BASELINE", True))
+    baseline_min_flows: int = field(default_factory=lambda: _get_int("NETSCOPE_BASELINE_MIN_FLOWS", 80))
     honeypot_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_HONEYPOT", False))
     honeypot_ports: str = field(default_factory=lambda: _get("NETSCOPE_HONEYPOT_PORTS", "23,2323,3389,8081"))
     auth_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_AUTH", False))
