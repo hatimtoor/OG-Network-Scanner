@@ -19,6 +19,7 @@ TECHNIQUES = {
     "T1190": "Exploit Public-Facing Application",
     "T1565": "Data Manipulation",
     "T1070": "Indicator Removal (file deleted)",
+    "T1105": "Ingress Tool Transfer",
     "T1046-scan": "Network Service Discovery",
 }
 
