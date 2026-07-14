@@ -34,6 +34,7 @@
     <button data-view="security">Security</button>
     <button data-view="alerts">Alerts <em id="alertCount"></em></button>
     <button data-view="cases">Cases</button>
+    <button data-view="assistant">Assistant</button>
   </nav>
 
   <main>
@@ -163,6 +164,23 @@
       </div>
       <div class="events" id="eventList"></div>
       <div class="empty" id="alertsEmpty">No alerts yet.</div>
+    </section>
+
+    <section class="view" id="view-assistant">
+      <div class="sec-panel" style="max-width:760px">
+        <h3 class="section-title">🤖 Ask NetScope <span class="muted" id="aiNote"></span></h3>
+        <div class="row">
+          <input type="text" id="aiInput" placeholder="e.g. What are my critical alerts? Who are my top talkers?" />
+          <button class="primary" id="aiBtn">Ask</button>
+        </div>
+        <div id="aiAnswer" class="ai-answer"></div>
+        <div class="ai-examples">
+          Try: <a href="#" class="ai-ex">What's wrong on my network?</a> ·
+          <a href="#" class="ai-ex">Who are my top talkers?</a> ·
+          <a href="#" class="ai-ex">Any vulnerabilities?</a> ·
+          <a href="#" class="ai-ex">How many devices are online?</a>
+        </div>
+      </div>
     </section>
 
     <section class="view" id="view-cases">
