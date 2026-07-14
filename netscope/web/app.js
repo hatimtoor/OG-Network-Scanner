@@ -13,6 +13,7 @@ const TYPE_LABEL = {
 let devices = [];
 let events = [];
 let status = {};
+let quarantinedKeys = new Set();
 
 // --------------------------------------------------------------------------- //
 // API helpers
@@ -32,6 +33,10 @@ async function refreshAll() {
     getJSON("/api/devices"),
     getJSON("/api/events"),
   ]);
+  try {
+    const q = await getJSON("/api/response/quarantined");
+    quarantinedKeys = new Set(q.map((r) => r.key).concat(q.map((r) => r.mac ? r.mac.toUpperCase() : "")));
+  } catch (_) {}
   renderStatus();
   renderDevices();
   renderEvents();
@@ -144,6 +149,7 @@ function openDetail(key) {
       <label class="toggle"><input type="checkbox" id="trustedInput" ${d.trusted ? "checked" : ""}/> Mark as trusted device</label>
     </div>
     <div class="actions">
+      <button class="ghost danger" id="quarBtn" data-key="${enc(d.key)}">${quarantinedKeys.has(d.key) ? "✅ Release" : "🚫 Quarantine"}</button>
       <button class="ghost" id="deepBtn" data-key="${enc(d.key)}">🔬 Deep Scan</button>
       <button class="ghost" id="closeModal">Close</button>
       <button class="primary" id="saveModal" data-key="${enc(d.key)}">Save</button>
@@ -152,6 +158,7 @@ function openDetail(key) {
   document.getElementById("modalBackdrop").classList.add("open");
   document.getElementById("closeModal").onclick = closeModal;
   document.getElementById("deepBtn").onclick = (e) => doDeepScan(e.target.dataset.key);
+  document.getElementById("quarBtn").onclick = (e) => toggleQuarantine(e.target.dataset.key);
   document.getElementById("saveModal").onclick = async (e) => {
     const label = document.getElementById("labelInput").value.trim();
     const trusted = document.getElementById("trustedInput").checked;
@@ -162,6 +169,25 @@ function openDetail(key) {
 }
 function closeModal() {
   document.getElementById("modalBackdrop").classList.remove("open");
+}
+
+async function toggleQuarantine(key) {
+  const d = devices.find((x) => x.key === key);
+  const isQ = quarantinedKeys.has(key) || (d && quarantinedKeys.has((d.mac || "").toUpperCase()));
+  if (isQ) {
+    await api("/api/response/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+  } else {
+    const ok = confirm(
+      `Quarantine "${d ? d.display_name : key}"?\n\n` +
+      "This ISOLATES the device from the network (ARP method, from this PC). " +
+      "The device will lose connectivity until you release it. Only do this to a device you control or believe is compromised."
+    );
+    if (!ok) return;
+    const r = await api("/api/response/quarantine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, method: "arp" }) });
+    if (r.error) { alert("Quarantine failed: " + r.error); return; }
+  }
+  closeModal();
+  await refreshAll();
 }
 
 function renderDeep(d) {
@@ -280,8 +306,15 @@ function renderEvents() {
     .map((e) => `<div class="event ${e.severity}">
       <input type="checkbox" class="ev-check" data-id="${e.id}" title="select for case"/>
       <span class="etime">${fmtTime(e.ts)}</span>
-      <span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}${e.case_id ? ` <span class="case-tag">case #${e.case_id}</span>` : ""}</span></div>`)
+      <span class="emsg">${enc(e.message)}${mitreBadge(e.mitre)}${e.case_id ? ` <span class="case-tag">case #${e.case_id}</span>` : ""}
+      ${playbookHtml(e.playbook)}</span></div>`)
     .join("");
+}
+
+function playbookHtml(pb) {
+  if (!pb) return "";
+  const steps = (pb.steps || []).map((s) => `<li>${enc(s)}</li>`).join("");
+  return `<details class="playbook"><summary>▸ What to do</summary><div class="pb-body"><b>${enc(pb.summary)}</b><ol>${steps}</ol></div></details>`;
 }
 
 function mitreBadge(id) {
