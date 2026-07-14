@@ -98,6 +98,7 @@ class Settings:
     detect_scan_hosts: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_SCAN_HOSTS", 25))
     detect_scan_ports: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_SCAN_PORTS", 15))
     detect_beacon_samples: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_BEACON_SAMPLES", 50))
+    detect_exfil_bytes: int = field(default_factory=lambda: _get_int("NETSCOPE_DETECT_EXFIL_BYTES", 50_000_000))
 
     # Notifications
     notify_desktop: bool = field(default_factory=lambda: _get_bool("NETSCOPE_NOTIFY_DESKTOP", True))
