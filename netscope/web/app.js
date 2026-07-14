@@ -218,6 +218,10 @@ function renderDeep(d) {
     html += kvline("UPnP", `${enc(u.friendly_name || parts)}${u.serial_number ? " · SN " + enc(u.serial_number) : ""}`);
   }
   if (det.mdns_model) html += kvline("mDNS model", enc(det.mdns_model));
+  if (det.user_agent) {
+    const u = det.user_agent;
+    html += kvline("User-Agent", enc([u.browser, u.os, u.device_type].filter(Boolean).join(" · ")));
+  }
   if (det.snmp && (det.snmp.descr || det.snmp.name)) {
     html += kvline("SNMP", enc(det.snmp.name || "") + (det.snmp.descr ? " · " + enc(det.snmp.descr) : ""));
   }
