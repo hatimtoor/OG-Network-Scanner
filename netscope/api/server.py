@@ -19,7 +19,9 @@ from ..core.monitor import Monitor
 from ..agent import fim, hostfacts
 from ..capture import pcap
 from ..db import analytics, store
+from ..detect import playbooks
 from ..enrich import cve, deepscan
+from ..response import quarantine
 from ..security import feeds, sensor, threatintel, yara_scan
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -139,7 +141,59 @@ async def deep_scan_device(key: str):
 
 @app.get("/api/events")
 async def get_events(limit: int = 100) -> list[dict]:
-    return store.list_events(limit=limit)
+    events = store.list_events(limit=limit)
+    for e in events:
+        pb = playbooks.for_type(e.get("type", ""))
+        if pb:
+            e["playbook"] = pb
+    return events
+
+
+# --------------------------------------------------------------------------- #
+# Active response (quarantine) — explicit, consented, reversible
+# --------------------------------------------------------------------------- #
+@app.get("/api/response/quarantined")
+async def get_quarantined() -> list[dict]:
+    return quarantine.list_quarantined()
+
+
+@app.post("/api/response/quarantine")
+async def do_quarantine(body: dict):
+    key = (body or {}).get("key", "")
+    device = store.get_device(key)
+    if device is None:
+        return JSONResponse({"error": "device not found"}, status_code=404)
+    gateway = discovery.get_gateway_ip()
+    if device["ip"] in (gateway, discovery.get_local_ip()):
+        return JSONResponse({"error": "refusing to quarantine the gateway or this host"},
+                            status_code=400)
+    result = await asyncio.to_thread(
+        quarantine.quarantine, device["ip"], device.get("mac", ""),
+        body.get("method", "arp"), body.get("router", ""),
+        body.get("user", "root"), gateway,
+    )
+    if result.get("ok"):
+        store.add_event("quarantine",
+                        f"Device quarantined: {device['display_name']} ({device['ip']}) "
+                        f"via {body.get('method', 'arp')}",
+                        severity="warning", ip=device["ip"], mac=device.get("mac", ""))
+        await hub.broadcast({"type": "devices_updated"})
+    return result
+
+
+@app.post("/api/response/release")
+async def do_release(body: dict):
+    result = await asyncio.to_thread(quarantine.release, (body or {}).get("key", ""))
+    if result.get("ok"):
+        store.add_event("quarantine", f"Device released from quarantine: {body.get('key')}",
+                        severity="info")
+        await hub.broadcast({"type": "devices_updated"})
+    return result
+
+
+@app.get("/api/playbooks")
+async def get_playbooks() -> dict:
+    return playbooks.all_playbooks()
 
 
 @app.post("/api/events/acknowledge")
