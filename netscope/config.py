@@ -114,6 +114,9 @@ class Settings:
     threat_auto_check: bool = field(default_factory=lambda: _get_bool("NETSCOPE_THREAT_AUTOCHECK", False))
     suricata_eve_path: str = field(default_factory=lambda: _get("NETSCOPE_SURICATA_EVE", ""))
     zeek_log_dir: str = field(default_factory=lambda: _get("NETSCOPE_ZEEK_DIR", ""))
+    mitm_log: str = field(default_factory=lambda: _get("NETSCOPE_MITM_LOG", ""))  # mitmproxy JSONL
+    snmp_router: str = field(default_factory=lambda: _get("NETSCOPE_SNMP_ROUTER", ""))
+    snmp_router_community: str = field(default_factory=lambda: _get("NETSCOPE_SNMP_ROUTER_COMMUNITY", "public"))
     yara_rules_path: str = field(default_factory=lambda: _get("NETSCOPE_YARA_RULES", ""))
     nvd_api_key: str = field(default_factory=lambda: _get("NETSCOPE_NVD_API_KEY", ""))
     cuckoo_url: str = field(default_factory=lambda: _get("NETSCOPE_CUCKOO_URL", ""))
