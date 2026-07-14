@@ -142,6 +142,50 @@ async def ack_events() -> dict:
     return {"acknowledged": store.acknowledge_events()}
 
 
+# --------------------------------------------------------------------------- #
+# Cases (basic incident response)
+# --------------------------------------------------------------------------- #
+@app.get("/api/cases")
+async def get_cases() -> list[dict]:
+    return store.list_cases()
+
+
+@app.post("/api/cases")
+async def create_case(body: dict):
+    title = (body or {}).get("title", "").strip() or "Untitled case"
+    case = store.create_case(
+        title, severity=body.get("severity", "info"), event_ids=body.get("event_ids"),
+    )
+    await hub.broadcast({"type": "cases_updated"})
+    return case
+
+
+@app.get("/api/cases/{case_id}")
+async def get_case(case_id: int):
+    case = store.get_case(case_id)
+    if case is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return case
+
+
+@app.patch("/api/cases/{case_id}")
+async def patch_case(case_id: int, body: dict):
+    case = store.update_case(case_id, **(body or {}))
+    if case is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    await hub.broadcast({"type": "cases_updated"})
+    return case
+
+
+@app.post("/api/cases/{case_id}/events")
+async def add_case_events(case_id: int, body: dict):
+    case = store.link_events_to_case(case_id, (body or {}).get("event_ids", []))
+    if case is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    await hub.broadcast({"type": "cases_updated"})
+    return case
+
+
 @app.post("/api/scan")
 async def trigger_scan() -> dict:
     # Fire-and-forget so the request returns immediately.
