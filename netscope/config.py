@@ -137,6 +137,16 @@ class Settings:
     fim_paths: str = field(default_factory=lambda: _get("NETSCOPE_FIM_PATHS", ""))  # comma-separated
     fim_interval: int = field(default_factory=lambda: _get_int("NETSCOPE_FIM_INTERVAL", 900))
 
+    # Threat-intel feeds (R16) + file extraction (R17)
+    feed_urls: str = field(default_factory=lambda: _get(
+        "NETSCOPE_FEED_URLS",
+        "https://feodotracker.abuse.ch/downloads/ipblocklist.txt,"
+        "https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt",
+    ))
+    feeds_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_FEEDS", True))
+    feed_refresh_hours: int = field(default_factory=lambda: _get_int("NETSCOPE_FEED_REFRESH_HOURS", 12))
+    extract_dir: str = field(default_factory=lambda: _get("NETSCOPE_EXTRACT_DIR", ""))
+
 
 _load_dotenv()
 settings = Settings()
