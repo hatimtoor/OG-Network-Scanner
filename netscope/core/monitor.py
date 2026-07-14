@@ -10,7 +10,7 @@ from ..db import analytics, store
 from ..notify import notify, send_html_email
 from ..agent import fim
 from ..detect import anomaly, baseline, behavioral, dns_analytics
-from ..enrich import passive
+from ..enrich import passive, useragent
 from ..security import feeds, sensor, threatintel, yara_scan
 from . import report, scanner, traffic
 
@@ -209,6 +209,10 @@ class Monitor:
             zeek_flows = await asyncio.to_thread(sensor.poll_new_conn_flows)
             if zeek_flows:
                 await asyncio.to_thread(analytics.record_zeek_flows, zeek_flows)
+            # Zeek http.log -> User-Agent identification per device.
+            for h in await asyncio.to_thread(sensor.poll_new_http):
+                ua = useragent.parse(h["user_agent"])
+                store.merge_device_details_by_ip(h["ip"], {"user_agent": ua})
             for domain in await asyncio.to_thread(sensor.poll_new_dns_names):
                 if domain not in self._fired_domains:
                     self._fired_domains.add(domain)
