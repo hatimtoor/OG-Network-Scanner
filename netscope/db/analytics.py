@@ -181,6 +181,56 @@ def stats() -> dict:
     }
 
 
+def scan_candidates(min_remotes: int = 20) -> list[dict]:
+    """Processes/hosts contacting many distinct external IPs (horizontal scan)."""
+    if _conn is None:
+        return []
+    with _lock:
+        rows = _conn.execute(
+            """SELECT process, local_ip, COUNT(DISTINCT remote_ip) AS remotes
+               FROM flows WHERE remote_is_local = FALSE
+               GROUP BY process, local_ip HAVING remotes >= ?
+               ORDER BY remotes DESC LIMIT 20""",
+            [min_remotes],
+        ).fetchall()
+    return [{"process": r[0], "local_ip": r[1], "remotes": r[2]} for r in rows]
+
+
+def vertical_scan_candidates(min_ports: int = 15) -> list[dict]:
+    """A single remote hit on many distinct ports (vertical/port scan)."""
+    if _conn is None:
+        return []
+    with _lock:
+        rows = _conn.execute(
+            """SELECT process, local_ip, remote_ip, COUNT(DISTINCT remote_port) AS ports
+               FROM flows GROUP BY process, local_ip, remote_ip
+               HAVING ports >= ? ORDER BY ports DESC LIMIT 20""",
+            [min_ports],
+        ).fetchall()
+    return [{"process": r[0], "local_ip": r[1], "remote_ip": r[2], "ports": r[3]} for r in rows]
+
+
+def beacon_candidates(min_samples: int = 30, min_duration_s: int = 600) -> list[dict]:
+    """External flows seen many times over a long window (steady = possible beacon)."""
+    if _conn is None:
+        return []
+    with _lock:
+        rows = _conn.execute(
+            """SELECT process, local_ip, remote_ip, remote_port, samples,
+                      date_diff('second', first_seen, last_seen) AS dur
+               FROM flows
+               WHERE remote_is_local = FALSE AND samples >= ?
+                 AND date_diff('second', first_seen, last_seen) >= ?
+               ORDER BY samples DESC LIMIT 30""",
+            [min_samples, min_duration_s],
+        ).fetchall()
+    return [
+        {"process": r[0], "local_ip": r[1], "remote_ip": r[2], "remote_port": r[3],
+         "samples": r[4], "duration_s": r[5]}
+        for r in rows
+    ]
+
+
 def prune(retention_days: int | None = None) -> int:
     if _conn is None:
         return 0
