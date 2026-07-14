@@ -8,7 +8,7 @@ from typing import Awaitable, Callable
 from ..config import RISKY_PORTS, settings
 from ..db import analytics, store
 from ..notify import notify
-from ..detect import behavioral
+from ..detect import behavioral, dns_analytics
 from ..enrich import passive
 from ..security import sensor, threatintel
 from . import scanner, traffic
@@ -34,6 +34,7 @@ class Monitor:
         self.latest_traffic: dict | None = None
         self._checked_ips: set[str] = set()
         self._fired_detections: set[str] = set()
+        self._fired_domains: set[str] = set()
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -133,6 +134,7 @@ class Monitor:
                 await self.scan_once()
                 await self._poll_security()
                 await self._run_behavioral()
+                await self._run_dns_detection()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
@@ -197,6 +199,27 @@ class Monitor:
                 store.add_event("threat", msg, severity="critical", ip=ip)
                 notify("Malicious connection detected", msg)
                 await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
+
+    async def _run_dns_detection(self) -> None:
+        """Analyze recently-seen DNS queries for DGA / tunneling patterns."""
+        if not settings.behavioral_enabled:
+            return
+        try:
+            domains = passive.listener.recent_domains()
+        except Exception:
+            return
+        for domain in list(domains.keys()):
+            if domain in self._fired_domains:
+                continue
+            self._fired_domains.add(domain)
+            verdict = dns_analytics.analyze_domain(domain)
+            if not verdict.suspicious:
+                continue
+            mitre = "T1568" if verdict.category == "dga" else "T1572"
+            msg = f"Suspicious DNS ({verdict.category}): {domain} — {'; '.join(verdict.reasons)}"
+            store.add_event("dns_anomaly", msg, severity="warning",
+                            ip=domains[domain].get("src", ""), mitre=mitre)
+            notify("Suspicious DNS query", f"{verdict.category}: {domain}")
 
     async def _traffic_loop(self) -> None:
         """Sample host throughput on a fast cadence for live charts."""
