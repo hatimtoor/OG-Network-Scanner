@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 from ..config import RISKY_PORTS, settings
 from ..db import analytics, store
 from ..notify import notify
+from ..detect import behavioral
 from ..enrich import passive
 from ..security import sensor, threatintel
 from . import scanner, traffic
@@ -32,6 +33,7 @@ class Monitor:
         self._meter = traffic.TrafficMeter()
         self.latest_traffic: dict | None = None
         self._checked_ips: set[str] = set()
+        self._fired_detections: set[str] = set()
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -130,9 +132,34 @@ class Monitor:
             try:
                 await self.scan_once()
                 await self._poll_security()
+                await self._run_behavioral()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
+
+    async def _run_behavioral(self) -> None:
+        """Run flow-based behavioral detections; emit new findings as events."""
+        if not settings.behavioral_enabled:
+            return
+        try:
+            detections = await asyncio.to_thread(behavioral.run_detections)
+        except Exception:
+            return
+        new = False
+        for d in detections:
+            if d.key in self._fired_detections:
+                continue
+            self._fired_detections.add(d.key)
+            store.add_event(
+                d.dtype, f"{d.title} — {d.description}", severity=d.severity,
+                ip=d.entities.get("remote_ip", "") or d.entities.get("local_ip", ""),
+                mitre=d.mitre_id,
+            )
+            if d.severity in ("warning", "critical"):
+                notify(f"Behavioral alert: {d.dtype}", d.title)
+            new = True
+        if new:
+            await self._emit({"type": "detections", "count": len(detections)})
 
     async def _poll_security(self) -> None:
         """Ingest new IDS alerts and optionally reputation-check external IPs."""
