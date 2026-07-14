@@ -585,8 +585,36 @@ async function refreshPcap() {
   btn.textContent = st.active ? "Stop capture" : "Start capture";
   btn.dataset.active = st.active ? "1" : "";
   document.getElementById("pcapFiles").innerHTML = files.slice(0, 12).map((f) =>
-    `<div><a href="/api/pcap/download/${encodeURIComponent(f.name)}" download>${enc(f.name)}</a> · ${f.size_mb} MB</div>`
+    `<div><a href="/api/pcap/download/${encodeURIComponent(f.name)}" download>${enc(f.name)}</a> · ${f.size_mb} MB
+      <a href="#" class="pcap-index" data-file="${enc(f.name)}">index for search</a></div>`
   ).join("") || '<span class="sub">No capture files yet.</span>';
+  document.querySelectorAll(".pcap-index").forEach((a) =>
+    a.addEventListener("click", async (e) => {
+      e.preventDefault(); a.textContent = "indexing…";
+      const r = await api("/api/pcap/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: a.dataset.file }) });
+      a.textContent = r.error ? "index failed" : `indexed ${r.indexed || 0}`;
+      refreshPktStats();
+    })
+  );
+  refreshPktStats();
+}
+
+async function refreshPktStats() {
+  try {
+    const s = await getJSON("/api/pcap/packet-stats");
+    document.getElementById("pktNote").textContent = s.total ? `(${s.total.toLocaleString()} packets, ${s.files} files)` : "(index a capture to search packets)";
+  } catch (_) {}
+}
+
+async function searchPackets() {
+  const q = document.getElementById("pktSearch").value.trim();
+  const isPort = /^\d+$/.test(q);
+  const url = isPort ? `/api/pcap/packets?port=${q}` : `/api/pcap/packets?ip=${encodeURIComponent(q)}`;
+  const tbody = document.querySelector("#pktTable tbody");
+  const pkts = await getJSON(url).catch(() => []);
+  tbody.innerHTML = pkts.length ? pkts.map((p) =>
+    `<tr><td>${fmtTime(p.ts)}</td><td>${enc(p.src_ip)}</td><td>${enc(p.dst_ip)}</td><td>${p.src_port || ""}</td><td>${p.dst_port || ""}</td><td>${enc(p.protocol)}</td><td>${p.length}</td></tr>`
+  ).join("") : `<tr><td colspan="7" class="sub" style="padding:12px">No matching packets (index a capture first).</td></tr>`;
 }
 
 async function togglePcap() {
@@ -839,6 +867,8 @@ document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
 document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
 document.getElementById("pcapToggle").onclick = togglePcap;
+document.getElementById("pktBtn").onclick = searchPackets;
+document.getElementById("pktSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPackets(); });
 document.getElementById("vulnBtn").onclick = scanHostVulns;
 document.getElementById("fimBtn").onclick = runFimScan;
 document.getElementById("aiBtn").onclick = () => askAI();
