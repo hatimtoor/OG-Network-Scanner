@@ -16,14 +16,16 @@ def test_record_connections_and_query(flows):
 
 
 def test_zeek_flows_bandwidth_and_exfil(flows):
+    # A genuinely public IP (documentation ranges like 203.0.113.x are treated as
+    # non-global/private by the stdlib and would be excluded from exfil).
     flows.record_zeek_flows([
-        {"local_ip": "192.168.1.30", "remote_ip": "203.0.113.9", "remote_port": 443,
+        {"local_ip": "192.168.1.30", "remote_ip": "45.55.10.9", "remote_port": 443,
          "protocol": "tcp", "bytes_sent": 120_000_000, "bytes_recv": 5_000},
     ])
     bw = flows.device_bandwidth()
     assert any(d["ip"] == "192.168.1.30" and d["bytes_sent"] == 120_000_000 for d in bw)
     exfil = flows.exfil_candidates(min_bytes=50_000_000)
-    assert exfil and exfil[0]["remote_ip"] == "203.0.113.9"
+    assert exfil and exfil[0]["remote_ip"] == "45.55.10.9"
 
 
 def test_stats_and_top_talkers(flows):
