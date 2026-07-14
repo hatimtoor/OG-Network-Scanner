@@ -12,7 +12,7 @@ from ..agent import fim
 from ..detect import anomaly, baseline, behavioral, dns_analytics
 from ..enrich import passive, useragent
 from ..security import feeds, mitm, sensor, threatintel, yara_scan
-from . import report, scanner, traffic
+from . import oui, report, scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
 
@@ -107,6 +107,34 @@ class Monitor:
                 )
                 notify("New device on your network", msg)
                 await self._emit({"type": "new_device", "device": store.get_device(key)})
+
+                # MAC-randomization awareness. A device that rotates its MAC shows
+                # up as brand-new every time; correlate by fingerprint so we can
+                # tell "same device, new MAC" (worth a warning) from an ordinary
+                # phone that simply uses a private MAC (logged, but not alarming).
+                fp = data.get("fingerprint", "")
+                matches = store.find_devices_by_fingerprint(fp, exclude_key=key) if fp else []
+                if matches:
+                    prior = matches[0]
+                    rot = (
+                        f"{name} ({record.ip}) matches a previously-seen device "
+                        f"'{prior['display_name']}' by fingerprint — its MAC changed "
+                        f"from {prior['mac'] or 'n/a'} to {record.mac}. This is normal "
+                        "MAC randomization, but can also be used to evade tracking."
+                    )
+                    store.add_event(
+                        "mac_rotation", rot, severity="warning",
+                        mac=record.mac, ip=record.ip,
+                    )
+                    notify("Device changed its MAC address", rot)
+                elif oui.is_randomized_mac(record.mac):
+                    store.add_event(
+                        "randomized_mac",
+                        f"{name} ({record.ip}) uses a private/randomized MAC "
+                        f"({record.mac}) — its hardware identity is hidden. "
+                        "Identified via other signals; verify it is authorized.",
+                        severity="info", mac=record.mac, ip=record.ip,
+                    )
 
             # Risky open-port alerts.
             for port_info in data.get("ports", []):
