@@ -21,7 +21,7 @@ from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
 from ..agent import fim, hostfacts
 from ..ai import assistant
-from ..capture import pcap
+from ..capture import pcap, pcap_index
 from ..db import analytics, store
 from ..detect import playbooks
 from ..enrich import cve, deepscan
@@ -430,6 +430,27 @@ async def pcap_start() -> dict:
 @app.post("/api/pcap/stop")
 async def pcap_stop() -> dict:
     return await asyncio.to_thread(pcap.manager.stop)
+
+
+@app.post("/api/pcap/index")
+async def pcap_index_file(body: dict):
+    name = (body or {}).get("file", "").strip()
+    path = pcap.manager.capture_path(name)
+    if path is None:
+        return JSONResponse({"error": "capture not found"}, status_code=404)
+    return await asyncio.to_thread(pcap_index.index_file, path)
+
+
+@app.get("/api/pcap/packets")
+async def pcap_packets(ip: str = "", port: int | None = None, protocol: str = "",
+                       source_file: str = "", limit: int = 300) -> list[dict]:
+    return await asyncio.to_thread(
+        analytics.search_packets, ip, port, protocol, source_file, limit)
+
+
+@app.get("/api/pcap/packet-stats")
+async def pcap_packet_stats() -> dict:
+    return await asyncio.to_thread(analytics.packet_stats)
 
 
 @app.get("/api/pcap/download/{name}")
