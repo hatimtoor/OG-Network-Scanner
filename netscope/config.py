@@ -132,6 +132,11 @@ class Settings:
     pcap_max_files: int = field(default_factory=lambda: _get_int("NETSCOPE_PCAP_MAX_FILES", 20))
     pcap_interface: str = field(default_factory=lambda: _get("NETSCOPE_PCAP_INTERFACE", ""))
 
+    # Host agent (R10) + FIM
+    host_agent_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_HOST_AGENT", True))
+    fim_paths: str = field(default_factory=lambda: _get("NETSCOPE_FIM_PATHS", ""))  # comma-separated
+    fim_interval: int = field(default_factory=lambda: _get_int("NETSCOPE_FIM_INTERVAL", 900))
+
 
 _load_dotenv()
 settings = Settings()
