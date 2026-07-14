@@ -167,6 +167,22 @@ def _device_to_dict(d: Device) -> dict:
     }
 
 
+def merge_device_details_by_ip(ip: str, details: dict) -> bool:
+    """Merge extra detail into the device that currently has this IP."""
+    if not (ip and details):
+        return False
+    with get_session() as session:
+        device = session.exec(select(Device).where(Device.ip == ip)).first()
+        if device is None:
+            return False
+        merged = json.loads(device.details_json or "{}")
+        merged.update(details)
+        device.details_json = json.dumps(merged)
+        session.add(device)
+        session.commit()
+        return True
+
+
 def save_device_details(key: str, details: dict, cves: list) -> dict | None:
     """Persist on-demand deep-scan results for a device."""
     with get_session() as session:
