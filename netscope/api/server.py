@@ -170,7 +170,7 @@ async def do_quarantine(body: dict):
     result = await asyncio.to_thread(
         quarantine.quarantine, device["ip"], device.get("mac", ""),
         body.get("method", "arp"), body.get("router", ""),
-        body.get("user", "root"), gateway,
+        body.get("user", "root"), gateway, int(body.get("duration_minutes", 0) or 0),
     )
     if result.get("ok"):
         store.add_event("quarantine",
@@ -296,6 +296,15 @@ async def get_top_talkers(limit: int = 15) -> list[dict]:
 @app.get("/api/flows/stats")
 async def get_flow_stats() -> dict:
     return await asyncio.to_thread(analytics.stats)
+
+
+@app.get("/api/flows/bandwidth")
+async def get_device_bandwidth(limit: int = 50) -> list[dict]:
+    rows = await asyncio.to_thread(analytics.device_bandwidth, limit)
+    by_ip = {d["ip"]: d["display_name"] for d in store.list_devices()}
+    for r in rows:
+        r["name"] = by_ip.get(r["ip"], r["ip"])
+    return rows
 
 
 # --------------------------------------------------------------------------- #
