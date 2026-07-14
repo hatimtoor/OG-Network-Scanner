@@ -92,9 +92,11 @@ def _arp_isolate_loop(target_ip: str, target_mac: str, gateway_ip: str, stop: th
 # Public API
 # --------------------------------------------------------------------------- #
 def quarantine(ip: str, mac: str, method: str = "arp",
-               router: str = "", user: str = "root", gateway_ip: str = "") -> dict:
+               router: str = "", user: str = "root", gateway_ip: str = "",
+               duration_minutes: int = 0) -> dict:
     key = (mac or ip).upper()
-    record = {"ip": ip, "mac": mac, "method": method, "since": _now(), "key": key}
+    record = {"ip": ip, "mac": mac, "method": method, "since": _now(), "key": key,
+              "duration_minutes": duration_minutes}
 
     if method == "openwrt":
         if not (router and mac):
@@ -116,6 +118,11 @@ def quarantine(ip: str, mac: str, method: str = "arp",
         return {"ok": False, "error": f"unknown method {method}"}
 
     state = _load(); state[key] = record; _save(state)
+
+    # Timed control ("pause for N minutes") — auto-release later.
+    if duration_minutes and duration_minutes > 0:
+        threading.Timer(duration_minutes * 60, lambda: release(key, user)).start()
+
     return {"ok": True, "quarantined": record}
 
 
