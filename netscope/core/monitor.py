@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 from ..config import RISKY_PORTS, settings
 from ..db import analytics, store
 from ..notify import notify
+from ..agent import fim
 from ..detect import behavioral, dns_analytics
 from ..enrich import passive
 from ..security import sensor, threatintel
@@ -35,6 +36,7 @@ class Monitor:
         self._checked_ips: set[str] = set()
         self._fired_detections: set[str] = set()
         self._fired_domains: set[str] = set()
+        self._last_fim: float = 0.0
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -135,6 +137,7 @@ class Monitor:
                 await self._poll_security()
                 await self._run_behavioral()
                 await self._run_dns_detection()
+                await self._run_fim()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
@@ -218,6 +221,27 @@ class Monitor:
                 store.add_event("threat", msg, severity="critical", ip=ip)
                 notify("Malicious connection detected", msg)
                 await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
+
+    async def _run_fim(self) -> None:
+        """Periodic file-integrity scan; alerts on modified/deleted watched files."""
+        if not (settings.host_agent_enabled and fim.configured()):
+            return
+        if time.monotonic() - self._last_fim < settings.fim_interval:
+            return
+        self._last_fim = time.monotonic()
+        try:
+            result = await asyncio.to_thread(fim.scan)
+        except Exception:
+            return
+        if result.get("first_run"):
+            return
+        for p in result.get("modified", []):
+            store.add_event("fim", f"Watched file modified: {p}", severity="warning", mitre="T1565")
+        for p in result.get("deleted", []):
+            store.add_event("fim", f"Watched file deleted: {p}", severity="warning", mitre="T1070")
+        if result.get("modified") or result.get("deleted"):
+            notify("File integrity alert",
+                   f"{len(result.get('modified', []))} modified, {len(result.get('deleted', []))} deleted")
 
     async def _run_dns_detection(self) -> None:
         """Analyze recently-seen DNS queries for DGA / tunneling patterns."""
