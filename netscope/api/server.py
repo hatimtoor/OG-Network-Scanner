@@ -190,6 +190,32 @@ async def deep_scan_device(key: str):
     return updated or {"error": "save failed"}
 
 
+@app.get("/api/dashboard")
+async def get_dashboard() -> dict:
+    counts = store.dashboard_counts()
+    stats = await asyncio.to_thread(analytics.stats)
+    counts["top_ports"] = stats.get("top_ports", [])
+    counts["throughput"] = store.list_traffic_history(limit=120)
+    counts["flows"] = {"total": stats.get("total_flows", 0),
+                       "external": stats.get("external_flows", 0)}
+    return counts
+
+
+@app.get("/api/search")
+async def unified_search(q: str = "", limit: int = 40) -> dict:
+    q = q.strip()
+    if not q:
+        return {"events": [], "devices": [], "flows": []}
+    devices = [d for d in store.list_devices()
+               if q.lower() in (d["display_name"] + d["ip"] + d["mac"] + d["vendor"]).lower()]
+    flows = await asyncio.to_thread(analytics.query_flows, "", "", None, False, q, limit)
+    return {
+        "events": store.search_events(q, limit),
+        "devices": devices[:limit],
+        "flows": flows,
+    }
+
+
 @app.get("/api/events")
 async def get_events(limit: int = 100) -> list[dict]:
     events = store.list_events(limit=limit)
