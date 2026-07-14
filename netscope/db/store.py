@@ -427,3 +427,28 @@ def prune_traffic(keep: int = 5000) -> None:
         for sample in session.exec(select(TrafficSample).where(TrafficSample.id.in_(ids))).all():
             session.delete(sample)
         session.commit()
+
+
+def prune_events(retention_days: int | None = None, hard_cap: int = 20000) -> int:
+    """Delete events older than the retention window (the events table was never
+    pruned and grew without bound). Also enforces a hard row cap as a backstop.
+    Returns the number of rows deleted."""
+    from datetime import timedelta
+    days = retention_days if retention_days is not None else settings.event_retention_days
+    cutoff = utcnow() - timedelta(days=days)
+    deleted = 0
+    with get_session() as session:
+        old = session.exec(select(Event).where(Event.ts < cutoff)).all()
+        for e in old:
+            session.delete(e)
+            deleted += 1
+        # Backstop: if still over the hard cap, drop the oldest beyond it.
+        extra_ids = session.exec(
+            select(Event.id).order_by(Event.ts.desc()).offset(hard_cap)
+        ).all()
+        if extra_ids:
+            for e in session.exec(select(Event).where(Event.id.in_(extra_ids))).all():
+                session.delete(e)
+                deleted += 1
+        session.commit()
+    return deleted
