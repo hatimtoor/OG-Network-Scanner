@@ -438,6 +438,35 @@ async function refreshSecurity() {
   ]);
   renderSecStatus(status);
   renderIdsAlerts(alerts);
+  refreshPcap().catch(() => {});
+}
+
+async function refreshPcap() {
+  const [st, files] = await Promise.all([
+    getJSON("/api/pcap/status"),
+    getJSON("/api/pcap/list").catch(() => []),
+  ]);
+  document.getElementById("pcapNote").textContent = st.backend ? `(${st.backend})` : "(no backend — install Wireshark)";
+  document.getElementById("pcapStatus").textContent =
+    `${st.active ? "🔴 capturing" : "idle"} · ${st.files} files · ${st.total_mb} MB`;
+  const btn = document.getElementById("pcapToggle");
+  btn.textContent = st.active ? "Stop capture" : "Start capture";
+  btn.dataset.active = st.active ? "1" : "";
+  document.getElementById("pcapFiles").innerHTML = files.slice(0, 12).map((f) =>
+    `<div><a href="/api/pcap/download/${encodeURIComponent(f.name)}" download>${enc(f.name)}</a> · ${f.size_mb} MB</div>`
+  ).join("") || '<span class="sub">No capture files yet.</span>';
+}
+
+async function togglePcap() {
+  const btn = document.getElementById("pcapToggle");
+  const path = btn.dataset.active ? "/api/pcap/stop" : "/api/pcap/start";
+  btn.disabled = true;
+  try {
+    const r = await api(path, { method: "POST" });
+    if (r.error) alert("Capture: " + r.error);
+  } catch (e) {}
+  btn.disabled = false;
+  refreshPcap();
 }
 
 function renderSecStatus(s) {
@@ -646,6 +675,7 @@ document.getElementById("modalBackdrop").onclick = (e) => {
 document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
 document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
+document.getElementById("pcapToggle").onclick = togglePcap;
 document.getElementById("makeCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("newCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("flowSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runFlowSearch(); });
