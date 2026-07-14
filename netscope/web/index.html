@@ -60,6 +60,13 @@
         <svg id="tpChart" viewBox="0 0 800 220" preserveAspectRatio="none"></svg>
         <div class="chart-legend"><span class="dl">■ Download</span><span class="ul">■ Upload</span></div>
       </div>
+      <h3 class="section-title">Per-device bandwidth <span class="muted">(cumulative; whole-network with a Zeek sensor)</span></h3>
+      <div class="conn-table-wrap">
+        <table class="conn-table" id="bwTable"><thead><tr>
+          <th>Device</th><th>IP</th><th>Uploaded</th><th>Downloaded</th><th>Flows</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+
       <h3 class="section-title">Active connections <span class="muted" id="connNote">(this machine)</span></h3>
       <div class="conn-table-wrap">
         <table class="conn-table" id="connTable"><thead><tr>
