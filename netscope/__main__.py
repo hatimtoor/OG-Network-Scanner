@@ -8,6 +8,7 @@ import uvicorn
 
 from . import __app_name__, __version__
 from .config import settings
+from .log import setup_logging
 
 
 def _loopback(host: str) -> bool:
@@ -15,6 +16,7 @@ def _loopback(host: str) -> bool:
 
 
 def main() -> None:
+    setup_logging()
     # Safety guard: never expose an unauthenticated instance on the network by
     # accident. Binding a non-loopback host with auth off is refused unless the
     # user explicitly opts in (and is nudged to turn auth on instead).
