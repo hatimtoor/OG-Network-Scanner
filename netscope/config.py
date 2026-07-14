@@ -158,7 +158,7 @@ class Settings:
     auth_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_AUTH", False))
     auth_password: str = field(default_factory=lambda: _get("NETSCOPE_PASSWORD", ""))
     anthropic_key: str = field(default_factory=lambda: _get("NETSCOPE_ANTHROPIC_KEY", ""))
-    ai_model: str = field(default_factory=lambda: _get("NETSCOPE_AI_MODEL", "claude-sonnet-5"))
+    ai_model: str = field(default_factory=lambda: _get("NETSCOPE_AI_MODEL", "claude-opus-4-8"))
 
 
 _load_dotenv()
