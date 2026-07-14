@@ -92,6 +92,7 @@ class Settings:
     )
     flow_record: bool = field(default_factory=lambda: _get_bool("NETSCOPE_FLOW_RECORD", True))
     flow_retention_days: int = field(default_factory=lambda: _get_int("NETSCOPE_FLOW_RETENTION_DAYS", 7))
+    event_retention_days: int = field(default_factory=lambda: _get_int("NETSCOPE_EVENT_RETENTION_DAYS", 30))
 
     # Behavioral detection thresholds
     behavioral_enabled: bool = field(default_factory=lambda: _get_bool("NETSCOPE_BEHAVIORAL", True))
