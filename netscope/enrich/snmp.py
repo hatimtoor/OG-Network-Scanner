@@ -73,10 +73,11 @@ def _enc_oid(oid: str) -> bytes:
     return _tlv(0x06, bytes(body))
 
 
-def build_get(oids: list[str], community: str = "public", request_id: int = 0x0A0B0C0D) -> bytes:
+def build_get(oids: list[str], community: str = "public",
+              request_id: int = 0x0A0B0C0D, pdu_tag: int = 0xA0) -> bytes:
     varbinds = b"".join(_tlv(0x30, _enc_oid(o) + _tlv(0x05, b"")) for o in oids)
     pdu_body = _enc_int(request_id) + _enc_int(0) + _enc_int(0) + _tlv(0x30, varbinds)
-    pdu = _tlv(0xA0, pdu_body)  # GetRequest
+    pdu = _tlv(pdu_tag, pdu_body)  # 0xA0 GetRequest, 0xA1 GetNextRequest
     msg = _enc_int(1) + _tlv(0x04, community.encode()) + pdu  # version 1 == v2c
     return _tlv(0x30, msg)
 
@@ -149,6 +150,112 @@ def _collect_varbinds(nodes) -> dict[str, str]:
 # --------------------------------------------------------------------------- #
 # Query
 # --------------------------------------------------------------------------- #
+def _first_varbind(nodes):
+    """Return (oid_str, value_tag, value_bytes) of the first OID→value pair."""
+    for tag, val in nodes:
+        if tag & 0x20 and isinstance(val, list):
+            if len(val) == 2 and val[0][0] == 0x06:
+                vtag, vval = val[1]
+                return _decode_oid(val[0][1]), vtag, (vval if not isinstance(vval, list) else b"")
+            r = _first_varbind(val)
+            if r[0]:
+                return r
+    return "", 0, b""
+
+
+def _send(ip: str, packet: bytes, timeout: float = 2.0) -> bytes:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
+        sock.sendto(packet, (ip, 161))
+        data, _ = sock.recvfrom(65507)
+        return data
+    except Exception:
+        return b""
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def walk(ip: str, base_oid: str, community: str = "public",
+         max_rows: int = 128, timeout: float = 2.0) -> list[tuple[str, str]]:
+    """SNMP GETNEXT walk of a subtree. Returns [(oid, value), ...]."""
+    results: list[tuple[str, str]] = []
+    current = base_oid
+    for _ in range(max_rows):
+        pkt = build_get([current], community, pdu_tag=0xA1)
+        data = _send(ip, pkt, timeout)
+        if not data:
+            break
+        try:
+            oid, vtag, vval = _first_varbind(_parse(data))
+        except Exception:
+            break
+        if not oid or not oid.startswith(base_oid + "."):
+            break  # walked past the subtree
+        results.append((oid, _decode_value(vtag, vval)))
+        current = oid
+    return results
+
+
+# Interface-table OIDs (32-bit + high-capacity counters).
+_IF_DESCR = "1.3.6.1.2.1.2.2.1.2"
+_IF_IN = "1.3.6.1.2.1.2.2.1.10"
+_IF_OUT = "1.3.6.1.2.1.2.2.1.16"
+_IF_HCIN = "1.3.6.1.2.1.31.1.1.1.6"
+_IF_HCOUT = "1.3.6.1.2.1.31.1.1.1.10"
+
+
+def _by_index(rows: list[tuple[str, str]]) -> dict[str, str]:
+    return {oid.rsplit(".", 1)[-1]: val for oid, val in rows}
+
+
+def get_interfaces(ip: str, community: str = "public") -> list[dict]:
+    """Return per-interface octet counters via an SNMP walk of the ifTable."""
+    descr = _by_index(walk(ip, _IF_DESCR, community))
+    if not descr:
+        return []
+    hcin = _by_index(walk(ip, _IF_HCIN, community))
+    hcout = _by_index(walk(ip, _IF_HCOUT, community))
+    inoct = hcin or _by_index(walk(ip, _IF_IN, community))
+    outoct = hcout or _by_index(walk(ip, _IF_OUT, community))
+    out = []
+    for idx, name in descr.items():
+        out.append({
+            "index": idx, "descr": name,
+            "in_octets": int(inoct.get(idx, "0") or 0),
+            "out_octets": int(outoct.get(idx, "0") or 0),
+        })
+    return out
+
+
+_last_if: dict[str, dict] = {}
+
+
+def interface_rates(ip: str, community: str, now: float) -> list[dict]:
+    """Per-interface throughput (bytes/sec) between successive polls of a router."""
+    ifaces = get_interfaces(ip, community)
+    prev = _last_if.get(ip, {})
+    cur: dict[str, tuple] = {}
+    out: list[dict] = []
+    for i in ifaces:
+        idx = i["index"]
+        cur[idx] = (i["in_octets"], i["out_octets"], now)
+        if idx in prev:
+            pin, pout, pts = prev[idx]
+            dt = now - pts
+            if dt > 0:
+                out.append({
+                    "descr": i["descr"],
+                    "in_bps": max(0.0, (i["in_octets"] - pin) / dt),
+                    "out_bps": max(0.0, (i["out_octets"] - pout) / dt),
+                })
+    _last_if[ip] = cur
+    return out
+
+
 def get_system_info(ip: str, community: str = "public", timeout: float = 2.0) -> SnmpInfo:
     oids = [SYS_DESCR, SYS_NAME, SYS_OBJECT_ID, SYS_UPTIME, SYS_LOCATION]
     packet = build_get(oids, community)
