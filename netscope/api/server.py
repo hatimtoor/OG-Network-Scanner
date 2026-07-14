@@ -20,6 +20,7 @@ from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
 from ..agent import fim, hostfacts
+from ..ai import assistant
 from ..capture import pcap
 from ..db import analytics, store
 from ..detect import playbooks
@@ -244,6 +245,20 @@ async def do_release(body: dict):
 @app.get("/api/playbooks")
 async def get_playbooks() -> dict:
     return playbooks.all_playbooks()
+
+
+# --------------------------------------------------------------------------- #
+# AI assistant
+# --------------------------------------------------------------------------- #
+@app.get("/api/ai/status")
+async def ai_status() -> dict:
+    return {"available": assistant.available(), "model": settings.ai_model}
+
+
+@app.post("/api/ai")
+async def ai_ask(body: dict):
+    question = (body or {}).get("question", "")
+    return await asyncio.to_thread(assistant.answer, question)
 
 
 @app.post("/api/events/acknowledge")
