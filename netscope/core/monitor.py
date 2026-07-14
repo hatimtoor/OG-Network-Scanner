@@ -46,6 +46,7 @@ class Monitor:
         self._last_feed_refresh: float = -1e9
         self._feed_hits: set[str] = set()
         self._scanned_files: set[str] = set()
+        self._fired_port_alerts: set[str] = set()
 
     # ---- lifecycle ---- #
     def start(self) -> None:
@@ -142,10 +143,15 @@ class Monitor:
                         severity="info", mac=record.mac, ip=record.ip,
                     )
 
-            # Risky open-port alerts.
+            # Risky open-port alerts — dedup so the same open port doesn't re-alert
+            # on every scan cycle (that spammed the DB with hundreds of copies/day).
             for port_info in data.get("ports", []):
                 port = port_info.get("port")
                 if port in RISKY_PORTS:
+                    dedup_key = f"{record.mac or record.ip}:{port}"
+                    if dedup_key in self._fired_port_alerts:
+                        continue
+                    self._fired_port_alerts.add(dedup_key)
                     name = record.label or record.hostname or record.ip
                     msg = (
                         f"{name} ({record.ip}) exposes {RISKY_PORTS[port]} "
@@ -449,6 +455,7 @@ class Monitor:
                 sample_count += 1
                 if sample_count % 100 == 0:
                     await asyncio.to_thread(store.prune_traffic)
+                    await asyncio.to_thread(store.prune_events)
                     if settings.flow_record:
                         await asyncio.to_thread(analytics.prune)
             except Exception:
