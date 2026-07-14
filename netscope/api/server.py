@@ -615,12 +615,39 @@ async def check_ip(body: dict):
     return verdict.to_dict()
 
 
+def _confined_scan_path(path: str) -> tuple[str, str]:
+    """Confine a caller-supplied file path to the configured scan directories.
+
+    Without this, the endpoint would hash/scan *any* file the process can read
+    (e.g. /etc/shadow) — an information-disclosure/traversal hole, especially when
+    auth is off and the server is exposed. Returns (safe_path, error).
+    """
+    roots = [d for d in (settings.extract_dir, settings.pcap_dir) if d]
+    if not roots:
+        return "", ("file scanning is disabled until a scan directory is configured "
+                    "(set NETSCOPE_EXTRACT_DIR)")
+    try:
+        p = Path(path).resolve()
+    except Exception:
+        return "", "invalid path"
+    for r in roots:
+        try:
+            if p.is_relative_to(Path(r).resolve()):
+                return (str(p), "") if p.is_file() else ("", "file not found")
+        except Exception:
+            continue
+    return "", "path is outside the allowed scan directory"
+
+
 @app.post("/api/security/scan-file")
 async def scan_file(body: dict):
     path = (body or {}).get("path", "").strip()
     if not path:
         return JSONResponse({"error": "path required"}, status_code=400)
-    result = await asyncio.to_thread(yara_scan.scan_file, path, True)
+    safe, err = _confined_scan_path(path)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    result = await asyncio.to_thread(yara_scan.scan_file, safe, True)
     return result.to_dict()
 
 
@@ -629,6 +656,10 @@ async def sandbox_file(body: dict):
     path = (body or {}).get("path", "").strip()
     if not path:
         return JSONResponse({"error": "path required"}, status_code=400)
+    safe, err = _confined_scan_path(path)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    path = safe
     result = await asyncio.to_thread(sandbox.analyze_file, path)
     return result.to_dict()
 
