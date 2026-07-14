@@ -301,11 +301,14 @@ class Monitor:
                     continue
                 self._scanned_files.add(path)
                 res = await asyncio.to_thread(yara_scan.scan_file, path, True)
-                bad = res.vt_verdict == "malicious" or res.yara_matches
+                feed_hit = feeds.check_hash(res.sha256)
+                bad = res.vt_verdict == "malicious" or res.yara_matches or feed_hit
                 if bad:
                     detail = res.vt_verdict
                     if res.yara_matches:
                         detail += " / YARA:" + ",".join(res.yara_matches)
+                    if feed_hit:
+                        detail += " / threat-feed hash match"
                     store.add_event("malware_file", f"Malicious extracted file {name} ({detail})",
                                     severity="critical", mitre="T1105")
                     notify("Malware in traffic", f"{name}: {detail}")
