@@ -7,12 +7,12 @@ from typing import Awaitable, Callable
 
 from ..config import RISKY_PORTS, settings
 from ..db import analytics, store
-from ..notify import notify
+from ..notify import notify, send_html_email
 from ..agent import fim
 from ..detect import behavioral, dns_analytics
 from ..enrich import passive
 from ..security import feeds, sensor, threatintel, yara_scan
-from . import scanner, traffic
+from . import report, scanner, traffic
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
 
@@ -37,6 +37,7 @@ class Monitor:
         self._fired_detections: set[str] = set()
         self._fired_domains: set[str] = set()
         self._last_fim: float = 0.0
+        self._last_report: float = 0.0
         self._last_feed_refresh: float = -1e9
         self._feed_hits: set[str] = set()
         self._scanned_files: set[str] = set()
@@ -143,6 +144,7 @@ class Monitor:
                 await self._run_dns_detection()
                 await self._run_fim()
                 await self._run_extract_scan()
+                await self._run_scheduled_report()
             except Exception as exc:  # keep the loop alive
                 await self._emit({"type": "error", "message": str(exc)})
             await asyncio.sleep(settings.scan_interval)
@@ -226,6 +228,23 @@ class Monitor:
                 store.add_event("threat", msg, severity="critical", ip=ip)
                 notify("Malicious connection detected", msg)
                 await self._emit({"type": "threat", "ip": ip, "verdict": verdict.verdict})
+
+    async def _run_scheduled_report(self) -> None:
+        """Email the HTML network report on a schedule (R21)."""
+        hours = settings.report_schedule_hours
+        if hours <= 0 or not (settings.report_email or settings.smtp_to):
+            return
+        if self._last_report and time.monotonic() - self._last_report < hours * 3600:
+            return
+        self._last_report = time.monotonic()
+        try:
+            html = await asyncio.to_thread(report.build_html_report)
+            sent = await asyncio.to_thread(
+                send_html_email, "NetScope network report", html)
+            if sent:
+                store.add_event("report", "Scheduled network report emailed", severity="info")
+        except Exception:
+            pass
 
     async def _run_feeds(self) -> None:
         """Refresh threat-intel feeds on schedule and match against connections."""
