@@ -429,6 +429,62 @@ async function runFlowSearch() {
 }
 
 // --------------------------------------------------------------------------- //
+// Host
+// --------------------------------------------------------------------------- //
+async function refreshHost() {
+  const [facts, fimSt] = await Promise.all([
+    getJSON("/api/host/facts"),
+    getJSON("/api/host/fim").catch(() => ({})),
+  ]);
+  const os = facts.os || {};
+  const card = (l, v) => `<div class="tp-card"><span class="label">${l}</span><span class="value" style="font-size:16px">${enc(v)}</span></div>`;
+  document.getElementById("hostCards").innerHTML =
+    card("Host", os.hostname || "—") +
+    card("OS", `${os.system || ""} ${os.release || ""}`) +
+    card("Software", facts.software_count ?? "—") +
+    card("Uptime", os.uptime_hours ? os.uptime_hours + " h" : "—");
+
+  document.querySelector("#portTable tbody").innerHTML =
+    (facts.listening_ports || []).map((p) =>
+      `<tr><td class="proc">${p.port}</td><td>${enc(p.address)}</td><td>${enc(p.process || "—")}</td><td>${p.pid || ""}</td></tr>`
+    ).join("") || `<tr><td colspan="4" class="sub" style="padding:14px">None.</td></tr>`;
+
+  document.getElementById("hardening").innerHTML =
+    (facts.hardening || []).map((h) => {
+      const icon = h.ok === true ? "✅" : h.ok === false ? "⚠️" : "❔";
+      return `<div class="deep-kv"><span class="dk">${icon} ${enc(h.check)}</span><span class="dv">${enc(h.status)}</span></div>`;
+    }).join("") || '<span class="sub">No checks.</span>';
+
+  document.getElementById("fimStatus").innerHTML = fimSt.configured
+    ? `Watching ${fimSt.baseline_files} files across ${(fimSt.watched_paths||[]).length} path(s).`
+    : "Not configured. Set NETSCOPE_FIM_PATHS to watch files.";
+}
+
+async function scanHostVulns() {
+  const box = document.getElementById("hostVulns");
+  box.innerHTML = '<span class="sub">Matching installed software against NVD… (rate-limited, ~20s)</span>';
+  try {
+    const r = await api("/api/host/vulns", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (!r.cves || !r.cves.length) { box.innerHTML = `<span class="sub">Checked ${r.checked} products — no known CVEs matched.</span>`; return; }
+    box.innerHTML = `<div class="sub">Checked ${r.checked} products:</div>` + r.cves.slice(0, 20).map((c) =>
+      `<div class="cve ${(c.severity||"").toLowerCase()}"><b>${enc(c.id)}</b> <span class="cve-sev">${enc(c.severity)} ${c.score||""}</span>
+       <div class="cve-sum">${enc(c.source_hint || "")}: ${enc((c.summary||"").slice(0,120))}</div></div>`
+    ).join("");
+  } catch (e) { box.innerHTML = '<span class="sub">Scan failed.</span>'; }
+}
+
+async function runFimScan() {
+  const el = document.getElementById("fimStatus");
+  el.textContent = "Scanning…";
+  try {
+    const r = await api("/api/host/fim/scan", { method: "POST" });
+    if (!r.configured) { el.textContent = "Not configured (set NETSCOPE_FIM_PATHS)."; return; }
+    if (r.first_run) { el.textContent = `Baseline established for ${r.watched} files.`; return; }
+    el.textContent = `${r.added.length} added, ${r.modified.length} modified, ${r.deleted.length} deleted (${r.watched} watched).`;
+  } catch (e) { el.textContent = "Scan failed."; }
+}
+
+// --------------------------------------------------------------------------- //
 // Security
 // --------------------------------------------------------------------------- //
 async function refreshSecurity() {
@@ -610,6 +666,7 @@ function setupTabs() {
       if (btn.dataset.view === "topology") renderTopology();
       if (btn.dataset.view === "traffic") refreshTraffic().catch(() => {});
       if (btn.dataset.view === "hunting") refreshHunting().catch(() => {});
+      if (btn.dataset.view === "host") refreshHost().catch(() => {});
       if (btn.dataset.view === "security") refreshSecurity().catch(() => {});
       if (btn.dataset.view === "cases") refreshCases().catch(() => {});
       if (btn.dataset.view === "alerts") api("/api/events/acknowledge", { method: "POST" }).then(refreshAll);
@@ -676,6 +733,8 @@ document.getElementById("ipCheckBtn").onclick = doIpCheck;
 document.getElementById("fileScanBtn").onclick = doFileScan;
 document.getElementById("flowSearchBtn").onclick = () => runFlowSearch();
 document.getElementById("pcapToggle").onclick = togglePcap;
+document.getElementById("vulnBtn").onclick = scanHostVulns;
+document.getElementById("fimBtn").onclick = runFimScan;
 document.getElementById("makeCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("newCaseBtn").onclick = createCaseFromSelected;
 document.getElementById("flowSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runFlowSearch(); });
