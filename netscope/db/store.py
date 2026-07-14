@@ -27,19 +27,28 @@ def _migrate() -> None:
     older netscope.db would be missing the newer Device columns. SQLite supports
     ADD COLUMN, which is all we need.
     """
-    additions = {
-        "details_json": "TEXT DEFAULT '{}'",
-        "cves_json": "TEXT DEFAULT '[]'",
-        "deep_scanned_at": "DATETIME",
+    per_table = {
+        "device": {
+            "details_json": "TEXT DEFAULT '{}'",
+            "cves_json": "TEXT DEFAULT '[]'",
+            "deep_scanned_at": "DATETIME",
+        },
+        "event": {
+            "mitre": "TEXT DEFAULT ''",
+            "case_id": "INTEGER",
+        },
     }
     try:
         with _engine.connect() as conn:
-            existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(device)")}
-            if not existing:
-                return
-            for name, ddl in additions.items():
-                if name not in existing:
-                    conn.exec_driver_sql(f"ALTER TABLE device ADD COLUMN {name} {ddl}")
+            for table, additions in per_table.items():
+                existing = {
+                    row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")
+                }
+                if not existing:
+                    continue
+                for name, ddl in additions.items():
+                    if name not in existing:
+                        conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
             conn.commit()
     except Exception:
         pass
@@ -179,10 +188,13 @@ def save_device_details(key: str, details: dict, cves: list) -> dict | None:
 # Events
 # --------------------------------------------------------------------------- #
 def add_event(
-    type: str, message: str, *, severity: str = "info", mac: str = "", ip: str = ""
+    type: str, message: str, *, severity: str = "info", mac: str = "", ip: str = "",
+    mitre: str = "",
 ) -> dict:
     with get_session() as session:
-        event = Event(type=type, message=message, severity=severity, mac=mac, ip=ip)
+        event = Event(
+            type=type, message=message, severity=severity, mac=mac, ip=ip, mitre=mitre
+        )
         session.add(event)
         session.commit()
         session.refresh(event)
@@ -215,6 +227,8 @@ def _event_to_dict(e: Event) -> dict:
         "ip": e.ip,
         "message": e.message,
         "acknowledged": e.acknowledged,
+        "mitre": e.mitre or "",
+        "case_id": e.case_id,
     }
 
 
