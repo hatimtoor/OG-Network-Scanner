@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from ..config import settings
+from ..core import oui
 from .models import Case, Device, Event, TrafficSample, utcnow
 
 _engine = create_engine(
@@ -32,6 +33,7 @@ def _migrate() -> None:
             "details_json": "TEXT DEFAULT '{}'",
             "cves_json": "TEXT DEFAULT '[]'",
             "deep_scanned_at": "DATETIME",
+            "fingerprint": "TEXT DEFAULT ''",
         },
         "event": {
             "mitre": "TEXT DEFAULT ''",
@@ -76,7 +78,8 @@ def upsert_device(data: dict) -> tuple[Device, bool]:
 
         # Update discovered fields (never overwrite user label/trusted).
         for field_name in (
-            "mac", "ip", "hostname", "vendor", "device_type", "os_guess", "confidence"
+            "mac", "ip", "hostname", "vendor", "device_type", "os_guess",
+            "confidence", "fingerprint",
         ):
             if field_name in data and data[field_name] not in (None, ""):
                 setattr(device, field_name, data[field_name])
@@ -150,6 +153,8 @@ def _device_to_dict(d: Device) -> dict:
         "ip": d.ip,
         "hostname": d.hostname,
         "vendor": d.vendor,
+        "randomized_mac": oui.is_randomized_mac(d.mac),
+        "fingerprint": d.fingerprint,
         "device_type": d.device_type,
         "os_guess": d.os_guess,
         "confidence": d.confidence,
@@ -165,6 +170,17 @@ def _device_to_dict(d: Device) -> dict:
         "deep_scanned_at": d.deep_scanned_at.isoformat() if d.deep_scanned_at else None,
         "display_name": d.label or d.hostname or d.vendor or d.ip,
     }
+
+
+def find_devices_by_fingerprint(fingerprint: str, exclude_key: str = "") -> list[dict]:
+    """Other devices sharing a fingerprint — i.e. the same device on a new MAC."""
+    if not fingerprint:
+        return []
+    with get_session() as session:
+        rows = session.exec(
+            select(Device).where(Device.fingerprint == fingerprint)
+        ).all()
+        return [_device_to_dict(d) for d in rows if d.key != exclude_key]
 
 
 def merge_device_details_by_ip(ip: str, details: dict) -> bool:
