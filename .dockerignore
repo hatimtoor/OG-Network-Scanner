@@ -1,0 +1,16 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+*.db
+*.duckdb
+*.duckdb.wal
+pcaps/
+zeek-logs/
+router-logs/
+node_modules
+web/dist
+.env
+*.log
+docs
