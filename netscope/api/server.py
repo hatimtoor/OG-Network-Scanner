@@ -16,6 +16,7 @@ from .. import __app_name__, __version__
 from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
+from ..capture import pcap
 from ..db import analytics, store
 from ..enrich import deepscan
 from ..security import sensor, threatintel, yara_scan
@@ -58,7 +59,10 @@ async def lifespan(app: FastAPI):
     store.init_db()
     analytics.init()
     monitor.start()
+    if settings.pcap_enabled:
+        pcap.manager.start()
     yield
+    pcap.manager.stop()
     await monitor.stop()
 
 
@@ -237,6 +241,38 @@ async def get_top_talkers(limit: int = 15) -> list[dict]:
 @app.get("/api/flows/stats")
 async def get_flow_stats() -> dict:
     return await asyncio.to_thread(analytics.stats)
+
+
+# --------------------------------------------------------------------------- #
+# Packet capture (PCAP)
+# --------------------------------------------------------------------------- #
+@app.get("/api/pcap/status")
+async def pcap_status() -> dict:
+    return pcap.manager.status()
+
+
+@app.get("/api/pcap/list")
+async def pcap_list() -> list[dict]:
+    return pcap.manager.list_captures()
+
+
+@app.post("/api/pcap/start")
+async def pcap_start() -> dict:
+    return await asyncio.to_thread(pcap.manager.start)
+
+
+@app.post("/api/pcap/stop")
+async def pcap_stop() -> dict:
+    return await asyncio.to_thread(pcap.manager.stop)
+
+
+@app.get("/api/pcap/download/{name}")
+async def pcap_download(name: str):
+    path = pcap.manager.capture_path(name)
+    if path is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path, filename=Path(path).name,
+                        media_type="application/vnd.tcpdump.pcap")
 
 
 # --------------------------------------------------------------------------- #
