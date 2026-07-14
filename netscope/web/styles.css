@@ -185,6 +185,12 @@ main { padding: 20px 28px 60px; }
 .sec-result .kv2 { margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.7; word-break: break-all; }
 .event.ids_alert, .event.threat { border-left-color: var(--crit); }
 
+/* Login overlay */
+.login-overlay { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 100; }
+.login-overlay.open { display: flex; }
+.login-box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: min(340px, 90vw); text-align: center; box-shadow: var(--shadow); }
+.login-box input { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 12px; }
+
 /* Deep scan section */
 .deep-wrap { margin: 14px 0; padding: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; }
 .deep-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
