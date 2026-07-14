@@ -78,6 +78,25 @@ NetScope has grown from a scanner into a Security-Onion-class monitoring platfor
 - **Optional login** (`NETSCOPE_AUTH=true`) and an **AI assistant** (Claude, or a
   built-in rule-based fallback) that answers natural-language questions about your network.
 
+### Advanced coverage (closing the enterprise gaps)
+
+- **Pattern-of-life anomaly** — learns each device's normal ports/peers, then flags new
+  services and peer fan-out spikes (explainable NDR-style detection).
+- **Packet index (mini-Arkime)** — index captured PCAPs and search packets by IP / port /
+  protocol; download the matching capture.
+- **MISP + STIX/TAXII** — consume the formal threat-sharing formats (+ hash IOCs).
+- **User-Agent identification** — from Zeek `http.log` and decrypted HTTPS.
+- **Malware sandboxing** — Cuckoo submission + VirusTotal behaviour verdicts (dynamic
+  analysis on top of static hash/VT/YARA).
+- **Decrypted HTTPS** — ingest **mitmproxy** output (`scripts/mitm-jsonl-addon.py`) to see
+  host/path/User-Agent per client (the same MITM approach an NGFW uses).
+- **Router bandwidth via SNMP** — per-interface throughput from the router's ifTable.
+- **Dashboards + global search** — a Dashboard tab (alert trends, MITRE coverage, top
+  ports, throughput) and a search box across devices, alerts, and flows.
+
+Config for these: `NETSCOPE_MISP_URL/_KEY`, `NETSCOPE_STIX_URL`, `NETSCOPE_CUCKOO_URL`,
+`NETSCOPE_MITM_LOG`, `NETSCOPE_SNMP_ROUTER` (all optional).
+
 ### Deep device inspection
 
 Beyond type/OS identification, NetScope can pull deep detail per device. Light
