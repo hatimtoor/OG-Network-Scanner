@@ -109,6 +109,7 @@ function deviceCard(d) {
   const portBadge = (d.ports || []).length
     ? `<span class="badge">${d.ports.length} open port${d.ports.length > 1 ? "s" : ""}</span>` : "";
   const trusted = d.trusted ? `<span class="badge trusted">✓ trusted</span>` : "";
+  const randomized = d.randomized_mac ? `<span class="badge risk" title="Uses a private/randomized MAC — hardware identity hidden">🎭 randomized MAC</span>` : "";
   return `
     <div class="card" data-key="${enc(d.key)}">
       <div class="status-corner">
@@ -124,7 +125,7 @@ function deviceCard(d) {
       <div class="meta">
         <span class="badge type">${TYPE_LABEL[d.device_type] || "Unknown"}</span>
         ${d.os_guess ? `<span class="badge">${enc(d.os_guess)}</span>` : ""}
-        ${portBadge}${trusted}${riskBadges}
+        ${portBadge}${trusted}${randomized}${riskBadges}
       </div>
       <div class="confidence-bar" title="Identification confidence: ${d.confidence}%">
         <i style="width:${Math.max(6, d.confidence)}%"></i>
@@ -148,7 +149,7 @@ function openDetail(key) {
     <div class="sub">${TYPE_LABEL[d.device_type] || "Unknown"} · confidence ${d.confidence}%</div>
     <div class="kv">
       <div class="k">IP address</div><div>${enc(d.ip)}</div>
-      <div class="k">MAC address</div><div>${enc(d.mac || "—")}</div>
+      <div class="k">MAC address</div><div>${enc(d.mac || "—")}${d.randomized_mac ? ' <span class="badge risk" title="Private/randomized MAC">🎭 randomized</span>' : ""}</div>
       <div class="k">Vendor</div><div>${enc(d.vendor || "—")}</div>
       <div class="k">Hostname</div><div>${enc(d.hostname || "—")}</div>
       <div class="k">OS guess</div><div>${enc(d.os_guess || "—")}</div>
@@ -212,6 +213,26 @@ function renderDeep(d) {
   const cves = d.cves || [];
   let html = "";
 
+  // Identity summary (always present after a deep scan).
+  if (det.identity) {
+    const it = det.identity;
+    const label = (TYPE_LABEL[it.device_type] || it.device_type || "Unknown") +
+      (it.os_guess ? " · " + it.os_guess : "") +
+      (it.confidence ? ` · ${it.confidence}% confidence` : "");
+    html += kvline("Identity", enc(label));
+  }
+  if (det.reverse_dns) html += kvline("Reverse DNS", enc(det.reverse_dns));
+  if (det.netbios_name) html += kvline("NetBIOS name", enc(det.netbios_name));
+  if (det.vendor) {
+    html += kvline("MAC vendor", enc(det.vendor) +
+      (det.randomized_mac ? ' <span class="badge risk" title="Locally-administered / private MAC">🎭 randomized</span>' : ""));
+  }
+  const netbits = [];
+  if (det.latency_ms != null) netbits.push(det.latency_ms + " ms");
+  if (det.ttl != null) netbits.push("TTL " + det.ttl);
+  if (det.nmap_os) netbits.push(enc(det.nmap_os));
+  if (netbits.length) html += kvline("Reachability", netbits.join(" · "));
+
   if (det.upnp) {
     const u = det.upnp;
     const parts = [u.manufacturer, u.model_name, u.model_number].filter(Boolean).join(" ");
@@ -228,12 +249,21 @@ function renderDeep(d) {
   if (det.passive && (det.passive.dhcp_os || det.passive.lldp_name)) {
     html += kvline("Passive", enc([det.passive.dhcp_os, det.passive.lldp_name].filter(Boolean).join(" · ")));
   }
-  if (det.ports && det.ports.length) {
-    const svc = det.ports.map((p) => {
-      const bits = [p.http_server, p.banner, p.http_title, p.tls_cn].filter(Boolean).join(" ");
-      return `${p.port}: ${enc(bits.slice(0, 60))}`;
+  // Live service scan (new key: services); older records used `ports`.
+  const svcList = det.services || det.ports || [];
+  if (svcList.length) {
+    const svc = svcList.map((p) => {
+      const bits = [p.service, p.product].filter(Boolean).join(" ");
+      return `<b>${p.port}</b>${bits ? " " + enc(bits.slice(0, 50)) : ""}${p.risky ? ' <span class="badge risk">⚠</span>' : ""}`;
     }).join("<br>");
     html += kvline("Services", svc);
+  }
+  if (det.banners && det.banners.length) {
+    const bn = det.banners.map((p) => {
+      const bits = [p.http_server, p.http_title, p.banner, p.tls_cn].filter(Boolean).join(" ");
+      return bits ? `${p.port}: ${enc(bits.slice(0, 60))}` : "";
+    }).filter(Boolean).join("<br>");
+    if (bn) html += kvline("Banners", bn);
   }
 
   if (cves.length) {
@@ -257,7 +287,7 @@ async function doDeepScan(key) {
   const section = document.getElementById("deepSection");
   const btn = document.getElementById("deepBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Scanning…"; }
-  if (section) section.innerHTML = '<div class="sub">Running deep scan (UPnP, banners, SNMP, CVE lookup)… this can take ~30s.</div>';
+  if (section) section.innerHTML = '<div class="sub">Running deep scan (service scan, reverse-DNS, NetBIOS, latency, UPnP/SNMP/banners, CVE lookup)… this can take up to ~30s.</div>';
   try {
     const updated = await api(`/api/devices/${encodeURIComponent(key)}/deepscan`, { method: "POST" });
     const idx = devices.findIndex((x) => x.key === key);
