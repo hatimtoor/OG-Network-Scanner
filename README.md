@@ -56,6 +56,28 @@ otherwise de-anonymize devices.
 
 All security features are optional and degrade gracefully when unconfigured.
 
+### NSM platform (Phase A–C)
+
+NetScope has grown from a scanner into a Security-Onion-class monitoring platform:
+
+- **Flow store + Hunting** — a DuckDB analytics store records connections over time;
+  the **Hunting** tab searches flows with top-talker and per-device bandwidth views.
+- **Behavioral detection** — explainable heuristics flag port/host scanning, C2
+  **beaconing**, and **data exfiltration**, each tagged with **MITRE ATT&CK** techniques.
+- **DNS + TLS analytics** — DGA/tunnelling domain detection and JA3/SNI fingerprinting.
+- **Case management** — group alerts into investigations with status, notes, and
+  linked events; every alert carries a **playbook** (what it means / what to do).
+- **Host agent** — software inventory, listening ports, logged-in users, hardening
+  checks, and **file-integrity monitoring** for the machine it runs on.
+- **Threat-intel feeds** — auto-refreshed IP/domain blocklists matched against traffic.
+- **Active response** — quarantine a device (OpenWrt firewall or ARP isolation),
+  consented and reversible, with timed "pause for N minutes".
+- **Anomaly detection + honeypots** — statistical throughput-spike detection and decoy
+  ports that alert on any probe.
+- **Compliance packs** — PCI/CIS/GDPR-style control scorecard + printable report.
+- **Optional login** (`NETSCOPE_AUTH=true`) and an **AI assistant** (Claude, or a
+  built-in rule-based fallback) that answers natural-language questions about your network.
+
 ### Deep device inspection
 
 Beyond type/OS identification, NetScope can pull deep detail per device. Light
@@ -109,6 +131,16 @@ The dashboard opens automatically at http://127.0.0.1:8000
 > **as Administrator** on Windows / with `sudo` on Linux. It still works without
 > elevation using the ping-sweep + ARP-table fallback.
 
+### Other ways to run it
+
+```bash
+# Docker (LAN discovery works best on a Linux host / Raspberry Pi)
+docker compose up -d          # then open http://localhost:8000
+
+# Standalone Windows .exe (no Python needed to run it)
+powershell -File scripts\build-exe.ps1   # produces dist\netscope.exe
+```
+
 ---
 
 ## Configuration
@@ -140,6 +172,21 @@ NETSCOPE_THREAT_AUTOCHECK=false  # auto-check external IPs this host talks to
 NETSCOPE_SURICATA_EVE=       # path to Suricata eve.json
 NETSCOPE_ZEEK_DIR=           # path to Zeek log directory
 NETSCOPE_YARA_RULES=         # path to a .yar rules file (needs yara-python)
+
+# Platform (Phase A-C) — all optional
+NETSCOPE_FLOW_RECORD=true         # record connections into the flow store
+NETSCOPE_BEHAVIORAL=true          # scan/beacon/exfil detection
+NETSCOPE_ANOMALY=true             # statistical throughput anomaly
+NETSCOPE_FEEDS=true               # threat-intel blocklists
+NETSCOPE_HOST_AGENT=true          # host facts + FIM
+NETSCOPE_FIM_PATHS=               # comma-separated files/dirs to watch
+NETSCOPE_PCAP=false               # rolling packet capture (heavy; needs Npcap)
+NETSCOPE_HONEYPOT=false           # decoy listener ports
+NETSCOPE_HONEYPOT_PORTS=23,2323,3389,8081
+NETSCOPE_REPORT_HOURS=0           # >0 = email the report every N hours
+NETSCOPE_AUTH=false               # require login
+NETSCOPE_PASSWORD=                # login password (when auth on)
+NETSCOPE_ANTHROPIC_KEY=           # enables the Claude AI assistant (pip install anthropic)
 
 # Misc
 NETSCOPE_OPEN_BROWSER=true   # set false to not auto-open the dashboard
