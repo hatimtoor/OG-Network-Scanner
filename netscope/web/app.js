@@ -395,7 +395,23 @@ function mitreBadge(id) {
 // --------------------------------------------------------------------------- //
 // Dashboard + unified search
 // --------------------------------------------------------------------------- //
+async function refreshHealth() {
+  const el = document.getElementById("healthBanner");
+  if (!el) return;
+  try {
+    const h = await getJSON("/api/health");
+    const errs = h.recent_errors || [];
+    if (!errs.length) { el.innerHTML = ""; return; }
+    const items = errs.slice(0, 5).map((e) =>
+      `<div class="health-err">${enc(e.message)}</div>`).join("");
+    el.innerHTML = `<div class="health-banner"><b>⚠ ${errs.length} recent internal `
+      + `${errs.length === 1 ? "issue" : "issues"}</b> (some features may be degraded)`
+      + `<details><summary>Details</summary>${items}</details></div>`;
+  } catch (e) { el.innerHTML = ""; }
+}
+
 async function refreshDashboard() {
+  refreshHealth();
   const d = await getJSON("/api/dashboard");
   const sev = d.severity || {};
   const card = (l, v, cls) => `<div class="tp-card"><span class="label">${l}</span><span class="value ${cls}">${v || 0}</span></div>`;
