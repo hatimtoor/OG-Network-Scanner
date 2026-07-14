@@ -16,7 +16,7 @@ from .. import __app_name__, __version__
 from ..config import settings
 from ..core import discovery, report, traffic
 from ..core.monitor import Monitor
-from ..db import store
+from ..db import analytics, store
 from ..enrich import deepscan
 from ..security import sensor, threatintel, yara_scan
 
@@ -56,6 +56,7 @@ monitor = Monitor(broadcast=hub.broadcast)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.init_db()
+    analytics.init()
     monitor.start()
     yield
     await monitor.stop()
@@ -169,6 +170,29 @@ async def get_traffic() -> dict:
 @app.get("/api/traffic/history")
 async def get_traffic_history(limit: int = 180) -> list[dict]:
     return store.list_traffic_history(limit=limit)
+
+
+# --------------------------------------------------------------------------- #
+# Flows / hunting (DuckDB analytics)
+# --------------------------------------------------------------------------- #
+@app.get("/api/flows")
+async def get_flows(
+    search: str = "", remote_ip: str = "", process: str = "",
+    port: int | None = None, external_only: bool = False, limit: int = 200,
+) -> list[dict]:
+    return await asyncio.to_thread(
+        analytics.query_flows, remote_ip, process, port, external_only, search, limit
+    )
+
+
+@app.get("/api/flows/top")
+async def get_top_talkers(limit: int = 15) -> list[dict]:
+    return await asyncio.to_thread(analytics.top_talkers, limit, True)
+
+
+@app.get("/api/flows/stats")
+async def get_flow_stats() -> dict:
+    return await asyncio.to_thread(analytics.stats)
 
 
 # --------------------------------------------------------------------------- #
