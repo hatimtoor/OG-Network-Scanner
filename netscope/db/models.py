@@ -69,3 +69,5 @@ class Event(SQLModel, table=True):
     ip: str = Field(default="")
     message: str = Field(default="")
     acknowledged: bool = Field(default=False)
+    mitre: str = Field(default="")       # MITRE technique id, if any
+    case_id: int | None = Field(default=None, index=True)
